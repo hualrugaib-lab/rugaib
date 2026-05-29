@@ -5860,92 +5860,16 @@ function renderDashboardStats(){
   const days=dn.map(t=>txDurationDays(t)).filter(d=>d!==null);
   const avgDays=days.length?Math.round(days.reduce((a,b)=>a+b,0)/days.length):0;
 
+  // ── شارت المعاملات الشهرية الاحترافي (تفاعلي مع فلتر فترة) ──
   const sparkEl=document.getElementById('dashSparkline');
   if(sparkEl){
-    // ── شارت المعاملات الشهرية: نافذة 90 يوم + متوسط متحرك للنعومة ──
-    const WINDOW_DAYS=90;
-    const SMOOTH_WIN=7; // متوسط متحرك بنافذة 7 أيام
-    const rawDone=[], rawCreated=[];
-    for(let d=WINDOW_DAYS-1;d>=0;d--){
-      const ds=new Date(today);ds.setDate(today.getDate()-d);ds.setHours(0,0,0,0);
-      const de=new Date(ds);de.setDate(ds.getDate()+1);
-      rawDone.push(dn.filter(t=>{const ca=txCompletedAt(t);return ca&&ca>=ds.getTime()&&ca<de.getTime();}).length);
-      rawCreated.push(tx.filter(t=>{const c=t.createdAt?new Date(t.createdAt).getTime():null;return c&&c>=ds.getTime()&&c<de.getTime();}).length);
-    }
-    // متوسط متحرك بنافذة SMOOTH_WIN لتنعيم القمم الحادة
-    const smooth=(arr)=>arr.map((_,i)=>{
-      const half=Math.floor(SMOOTH_WIN/2);
-      let sum=0,cnt=0;
-      for(let j=Math.max(0,i-half);j<=Math.min(arr.length-1,i+half);j++){sum+=arr[j];cnt++;}
-      return sum/cnt;
-    });
-    const dailyDone=smooth(rawDone);
-    const dailyCreated=smooth(rawCreated);
-    const totalDone=rawDone.reduce((a,b)=>a+b,0);
-    const totalCreated=rawCreated.reduce((a,b)=>a+b,0);
-    const n=dailyDone.length;
-    const W=600,H=200,padL=36,padR=14,padT=18,padB=26;
-    const maxV=Math.max(...dailyDone,...dailyCreated,4);
-    const niceMax=Math.ceil(maxV/4)*4;
-    const xAt=i=>padL+(W-padL-padR)*(i/(n-1));
-    const yAt=v=>padT+(H-padT-padB)*(1-v/niceMax);
-    const buildPath=(series)=>{
-      const pts=series.map((v,i)=>[xAt(i),yAt(v)]);
-      if(pts.length<2) return {linePath:'',areaPath:'',pts:pts};
-      let dpath=`M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
-      for(let i=0;i<pts.length-1;i++){
-        const p0=pts[i-1]||pts[i],p1=pts[i],p2=pts[i+1],p3=pts[i+2]||p2;
-        const c1x=p1[0]+(p2[0]-p0[0])/6,c1y=p1[1]+(p2[1]-p0[1])/6;
-        const c2x=p2[0]-(p3[0]-p1[0])/6,c2y=p2[1]-(p3[1]-p1[1])/6;
-        dpath+=` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
-      }
-      const areaPath=`${dpath} L${pts[n-1][0].toFixed(1)},${(H-padB).toFixed(1)} L${pts[0][0].toFixed(1)},${(H-padB).toFixed(1)} Z`;
-      return {linePath:dpath,areaPath:areaPath,pts:pts};
-    };
-    const doneChart=buildPath(dailyDone);
-    const createdChart=buildPath(dailyCreated);
-    // اختر المنحنى الأعلى لرسم التظليل والقمة عليه (لضمان ظهور بصري حتى لو كانت المنجزة صفر)
-    const primaryIsDone=totalDone>=totalCreated;
-    const primarySeries=primaryIsDone?dailyDone:dailyCreated;
-    const primaryColor=primaryIsDone?'#6366F1':'#14B8A6';
-    const primaryFillId=primaryIsDone?'dashDoneFill':'dashCreatedFill';
-    const peakIdx=primarySeries.indexOf(Math.max(...primarySeries));
-    const peakVal=primarySeries[peakIdx]||0;
-    // القيمة المعروضة في علامة القمة = القيمة الخام (rawDone أو rawCreated) في نفس اليوم
-    const peakRawVal=primaryIsDone?rawDone[peakIdx]:rawCreated[peakIdx];
-    const peakDisplay=peakRawVal||Math.round(peakVal*SMOOTH_WIN);
-    const gridY=[0,niceMax/2,niceMax].map(v=>`<line x1="${padL}" y1="${yAt(v).toFixed(1)}" x2="${W-padR}" y2="${yAt(v).toFixed(1)}" stroke="#DDE1E8" stroke-width="0.8" stroke-dasharray="2,3"/><text x="${padL-6}" y="${(yAt(v)+3).toFixed(1)}" text-anchor="end" font-size="10" fill="#94A3B8" font-family="JetBrains Mono">${v.toFixed(v<1?1:0)}</text>`).join('');
-    // 5 علامات على المحور الأفقي عبر 90 يوم
-    const labelStops=[0,Math.floor(n*0.25),Math.floor(n*0.5),Math.floor(n*0.75),n-1];
-    const xLabels=labelStops.map(i=>{const ds=new Date(today);ds.setDate(today.getDate()-(n-1-i));return `<text x="${xAt(i).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="9" fill="#94A3B8" font-family="JetBrains Mono">${ds.getDate()}/${ds.getMonth()+1}</text>`;}).join('');
-    sparkEl.innerHTML=`
-    <div style="background:#EEF0F4;border-radius:20px;padding:20px;box-shadow:6px 6px 12px #c5c9d2,-6px -6px 12px #ffffff;height:100%;box-sizing:border-box">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#818CF8,#6366F1);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 9px rgba(99,102,241,.3)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-8"/><path d="M16 8h4v4"/></svg></div>
-          <span style="font-size:15px;font-weight:700;color:#0F172A">المعاملات الشهرية</span>
-        </div>
-        <div style="background:#EEF0F4;border-radius:9px;padding:6px 12px;box-shadow:inset 2px 2px 4px #d2d6dd,inset -2px -2px 4px #ffffff;font-size:11px;color:#475569">آخر 90 يوماً</div>
-      </div>
-      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:200px;overflow:visible">
-        <defs>
-          <linearGradient id="dashDoneFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#6366F1" stop-opacity="0.22"/><stop offset="100%" stop-color="#6366F1" stop-opacity="0"/></linearGradient>
-          <linearGradient id="dashCreatedFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#14B8A6" stop-opacity="0.22"/><stop offset="100%" stop-color="#14B8A6" stop-opacity="0"/></linearGradient>
-        </defs>
-        ${gridY}
-        ${primaryIsDone?(doneChart.areaPath?`<path d="${doneChart.areaPath}" fill="url(#${primaryFillId})"/>`:''):(createdChart.areaPath?`<path d="${createdChart.areaPath}" fill="url(#${primaryFillId})"/>`:'')}
-        ${createdChart.linePath?`<path d="${createdChart.linePath}" stroke="#14B8A6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="${primaryIsDone?'0.65':'1'}"/>`:''}
-        ${doneChart.linePath?`<path d="${doneChart.linePath}" stroke="#6366F1" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="${primaryIsDone?'1':'0.65'}"/>`:''}
-        ${peakIdx>=0&&peakVal>0?`<circle cx="${xAt(peakIdx).toFixed(1)}" cy="${yAt(peakVal).toFixed(1)}" r="11" fill="${primaryColor}" opacity="0.16"/><circle cx="${xAt(peakIdx).toFixed(1)}" cy="${yAt(peakVal).toFixed(1)}" r="5" fill="#EEF0F4" stroke="${primaryColor}" stroke-width="2.5"/><rect x="${(xAt(peakIdx)-16).toFixed(1)}" y="${(yAt(peakVal)-30).toFixed(1)}" width="32" height="22" rx="6" fill="#0F172A"/><text x="${xAt(peakIdx).toFixed(1)}" y="${(yAt(peakVal)-15).toFixed(1)}" text-anchor="middle" fill="#fff" font-size="12" font-weight="700" font-family="JetBrains Mono">${peakDisplay}</text>`:''}
-        ${xLabels}
-      </svg>
-      <div style="display:flex;justify-content:center;gap:22px;margin-top:6px;font-size:11px">
-        <div style="display:flex;align-items:center;gap:5px;color:#475569"><span style="width:9px;height:9px;border-radius:50%;background:#6366F1"></span>المنجزة (${totalDone})</div>
-        <div style="display:flex;align-items:center;gap:5px;color:#475569"><span style="width:9px;height:9px;border-radius:50%;background:#14B8A6"></span>المنشأة (${totalCreated})</div>
-      </div>
-    </div>`;
+    // احفظ المراجع الخام للبيانات لإعادة الرسم عند تغيير الفترة
+    window._dashChartData={tx:tx,dn:dn,today:today,txCompletedAt:txCompletedAt};
+    if(!window._dashChartPeriod) window._dashChartPeriod={mode:'90',start:null,end:null};
+    renderDashSparkline();
   }
   renderDashTimeline();
+
   renderDashToday();
 }
 
@@ -6006,6 +5930,199 @@ function renderDashToday(){
         ${eventsList}
       </div>
     </div>`;
+}
+
+function renderDashSparkline(){
+  const sparkEl=document.getElementById('dashSparkline');
+  if(!sparkEl||!window._dashChartData) return;
+  const {tx,dn,today,txCompletedAt}=window._dashChartData;
+  const period=window._dashChartPeriod||{mode:'90'};
+
+  // ── حدّد نطاق التاريخ بناء على الفلتر ──
+  let startDate, endDate=new Date(today);endDate.setHours(23,59,59,999);
+  if(period.mode==='custom'&&period.start&&period.end){
+    startDate=new Date(period.start);startDate.setHours(0,0,0,0);
+    endDate=new Date(period.end);endDate.setHours(23,59,59,999);
+  } else {
+    const daysMap={'7':7,'30':30,'90':90,'365':365};
+    const d=daysMap[period.mode]||90;
+    startDate=new Date(today);startDate.setDate(today.getDate()-(d-1));startDate.setHours(0,0,0,0);
+  }
+  const totalDays=Math.max(1,Math.round((endDate-startDate)/86400000));
+
+  // ── بناء سلسلة يومية ضمن النطاق ──
+  const rawDone=[], rawCreated=[], dateLabels=[];
+  for(let i=0;i<totalDays;i++){
+    const ds=new Date(startDate);ds.setDate(startDate.getDate()+i);
+    const de=new Date(ds);de.setDate(ds.getDate()+1);
+    dateLabels.push(new Date(ds));
+    rawDone.push(dn.filter(t=>{const ca=txCompletedAt(t);return ca&&ca>=ds.getTime()&&ca<de.getTime();}).length);
+    rawCreated.push(tx.filter(t=>{const c=t.createdAt?new Date(t.createdAt).getTime():null;return c&&c>=ds.getTime()&&c<de.getTime();}).length);
+  }
+  const totalDone=rawDone.reduce((a,b)=>a+b,0);
+  const totalCreated=rawCreated.reduce((a,b)=>a+b,0);
+
+  // ── محور Y ديناميكي محكم: يستخدم كامل الارتفاع ──
+  const maxRaw=Math.max(...rawDone,...rawCreated,1);
+  // نضيف هامش 20% فوق القيمة القصوى لإراحة العين
+  const yMax=maxRaw<=1?1.5:maxRaw<=3?maxRaw+1:Math.ceil(maxRaw*1.2);
+  // عدد خطوط الشبكة الأفقية
+  const yTicks=yMax<=2?[0,0.5,1,1.5,2].filter(v=>v<=yMax):yMax<=5?Array.from({length:Math.ceil(yMax)+1},(_,i)=>i):(()=>{
+    const step=Math.ceil(yMax/5);return Array.from({length:6},(_,i)=>i*step).filter(v=>v<=yMax+step);
+  })();
+
+  // ── أبعاد المخطط ──
+  const W=900,H=300,padL=44,padR=18,padT=28,padB=42;
+  const xAt=i=>padL+(W-padL-padR)*(totalDays>1?i/(totalDays-1):0.5);
+  const yAt=v=>padT+(H-padT-padB)*(1-v/yMax);
+
+  // ── منحنى Catmull-Rom ناعم ──
+  const buildPath=(arr)=>{
+    const pts=arr.map((v,i)=>[xAt(i),yAt(v)]);
+    if(pts.length<2) return {line:'',area:'',pts:pts};
+    let d=`M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+    for(let i=0;i<pts.length-1;i++){
+      const p0=pts[i-1]||pts[i],p1=pts[i],p2=pts[i+1],p3=pts[i+2]||p2;
+      const c1x=p1[0]+(p2[0]-p0[0])/6,c1y=p1[1]+(p2[1]-p0[1])/6;
+      const c2x=p2[0]-(p3[0]-p1[0])/6,c2y=p2[1]-(p3[1]-p1[1])/6;
+      d+=` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+    }
+    const area=`${d} L${pts[pts.length-1][0].toFixed(1)},${(H-padB).toFixed(1)} L${pts[0][0].toFixed(1)},${(H-padB).toFixed(1)} Z`;
+    return {line:d,area:area,pts:pts};
+  };
+  const doneCh=buildPath(rawDone);
+  const createdCh=buildPath(rawCreated);
+
+  // ── الشبكة الأفقية وعلامات Y ──
+  const gridY=yTicks.map(v=>`<line x1="${padL}" y1="${yAt(v).toFixed(1)}" x2="${W-padR}" y2="${yAt(v).toFixed(1)}" stroke="#DDE1E8" stroke-width="0.8" stroke-dasharray="2,3"/><text x="${padL-8}" y="${(yAt(v)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#94A3B8" font-family="JetBrains Mono">${Number.isInteger(v)?v:v.toFixed(1)}</text>`).join('');
+
+  // ── علامات X (6 تواريخ موزّعة) ──
+  const xMarkCount=Math.min(6,totalDays);
+  const xMarks=Array.from({length:xMarkCount},(_,k)=>{
+    const i=Math.round(k*(totalDays-1)/(xMarkCount-1||1));
+    const d=dateLabels[i];
+    return `<text x="${xAt(i).toFixed(1)}" y="${H-18}" text-anchor="middle" font-size="11" fill="#64748B" font-family="JetBrains Mono">${d.getDate()}/${d.getMonth()+1}</text>`;
+  }).join('');
+
+  // ── نقاط البيانات (dots للقيم > 0) ──
+  const dots=rawCreated.map((v,i)=>v>0?`<circle class="dash-spk-dot" data-i="${i}" data-v="${v}" data-series="created" cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="4" fill="#fff" stroke="#14B8A6" stroke-width="2"/>`:'').join('')
+    + rawDone.map((v,i)=>v>0?`<circle class="dash-spk-dot" data-i="${i}" data-v="${v}" data-series="done" cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="4" fill="#fff" stroke="#6366F1" stroke-width="2"/>`:'').join('');
+
+  // ── شارة الفترة (لزر مخصص) ──
+  const fmtD=d=>`${d.getDate()}/${d.getMonth()+1}`;
+  const periodLabel=period.mode==='custom'?`${fmtD(startDate)} — ${fmtD(endDate)}`:`آخر ${totalDays} يوماً`;
+
+  // ── أزرار فلتر الفترة ──
+  const periodBtn=(val,lbl)=>{
+    const active=period.mode===val;
+    return `<button onclick="setDashChartPeriod('${val}')" style="background:${active?'linear-gradient(135deg,#6366F1,#4338CA)':'#EEF0F4'};color:${active?'#fff':'#475569'};border:none;border-radius:9px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:${active?'0 2px 6px rgba(99,102,241,.3)':'inset 2px 2px 4px #d2d6dd,inset -2px -2px 4px #ffffff'};transition:all .15s">${lbl}</button>`;
+  };
+
+  sparkEl.innerHTML=`
+    <div style="background:#EEF0F4;border-radius:20px;padding:20px;box-shadow:6px 6px 12px #c5c9d2,-6px -6px 12px #ffffff;height:100%;box-sizing:border-box">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#818CF8,#6366F1);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 9px rgba(99,102,241,.3)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-8"/><path d="M16 8h4v4"/></svg></div>
+          <span style="font-size:15px;font-weight:700;color:#0F172A">المعاملات الشهرية</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          ${periodBtn('7','7 أيام')}
+          ${periodBtn('30','30 يوم')}
+          ${periodBtn('90','90 يوم')}
+          ${periodBtn('365','سنة')}
+          <button onclick="openDashChartCustom()" style="background:${period.mode==='custom'?'linear-gradient(135deg,#6366F1,#4338CA)':'#EEF0F4'};color:${period.mode==='custom'?'#fff':'#475569'};border:none;border-radius:9px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:${period.mode==='custom'?'0 2px 6px rgba(99,102,241,.3)':'inset 2px 2px 4px #d2d6dd,inset -2px -2px 4px #ffffff'};display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>مخصص</button>
+        </div>
+      </div>
+      <div id="dashChartCustomBar" style="display:${period.mode==='custom'?'flex':'none'};gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;background:#EEF0F4;border-radius:12px;padding:10px 12px;box-shadow:inset 2px 2px 5px #d2d6dd,inset -2px -2px 5px #ffffff">
+        <span style="font-size:11px;color:#475569;font-weight:600">من:</span>
+        <input type="date" id="dashChartStart" value="${period.start||''}" onchange="applyDashChartCustom()" style="background:#fff;border:none;border-radius:7px;padding:5px 9px;font-family:inherit;font-size:11px;color:#0F172A;box-shadow:inset 1px 1px 3px #d2d6dd"/>
+        <span style="font-size:11px;color:#475569;font-weight:600">إلى:</span>
+        <input type="date" id="dashChartEnd" value="${period.end||''}" onchange="applyDashChartCustom()" style="background:#fff;border:none;border-radius:7px;padding:5px 9px;font-family:inherit;font-size:11px;color:#0F172A;box-shadow:inset 1px 1px 3px #d2d6dd"/>
+        <span style="margin-right:auto;font-size:11px;color:#94A3B8;font-family:'JetBrains Mono'">${periodLabel}</span>
+      </div>
+      <div style="position:relative" id="dashChartWrap">
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:300px;display:block;cursor:crosshair" id="dashChartSvg">
+          <defs>
+            <linearGradient id="dashDoneFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#6366F1" stop-opacity="0.22"/><stop offset="100%" stop-color="#6366F1" stop-opacity="0"/></linearGradient>
+            <linearGradient id="dashCreatedFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#14B8A6" stop-opacity="0.20"/><stop offset="100%" stop-color="#14B8A6" stop-opacity="0"/></linearGradient>
+          </defs>
+          ${gridY}
+          ${createdCh.area?`<path d="${createdCh.area}" fill="url(#dashCreatedFill)"/>`:''}
+          ${doneCh.area?`<path d="${doneCh.area}" fill="url(#dashDoneFill)"/>`:''}
+          ${createdCh.line?`<path d="${createdCh.line}" stroke="#14B8A6" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`:''}
+          ${doneCh.line?`<path d="${doneCh.line}" stroke="#6366F1" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`:''}
+          <line id="dashChartCrosshair" x1="0" y1="${padT}" x2="0" y2="${H-padB}" stroke="#0F172A" stroke-width="1" stroke-dasharray="3,3" opacity="0"/>
+          ${dots}
+          ${xMarks}
+          <rect id="dashChartHover" x="${padL}" y="${padT}" width="${W-padL-padR}" height="${H-padT-padB}" fill="transparent"/>
+        </svg>
+        <div id="dashChartTooltip" style="position:absolute;display:none;background:#0F172A;color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;pointer-events:none;box-shadow:0 6px 16px rgba(15,23,42,.3);z-index:10;font-family:'IBM Plex Sans Arabic',sans-serif;white-space:nowrap"></div>
+      </div>
+      <div style="display:flex;justify-content:center;gap:24px;margin-top:10px;font-size:12px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:6px;color:#475569"><span style="width:10px;height:10px;border-radius:50%;background:#6366F1"></span><span>المنجزة</span><span style="font-family:'JetBrains Mono';font-weight:700;color:#0F172A">${totalDone}</span></div>
+        <div style="display:flex;align-items:center;gap:6px;color:#475569"><span style="width:10px;height:10px;border-radius:50%;background:#14B8A6"></span><span>المنشأة</span><span style="font-family:'JetBrains Mono';font-weight:700;color:#0F172A">${totalCreated}</span></div>
+      </div>
+    </div>`;
+
+  // ── ربط التفاعلية بعد الرسم ──
+  setTimeout(()=>attachDashChartInteraction(rawDone,rawCreated,dateLabels,xAt,yAt,W,H,padL,padR,padT,padB),0);
+}
+
+function attachDashChartInteraction(rawDone,rawCreated,dateLabels,xAt,yAt,W,H,padL,padR,padT,padB){
+  const svg=document.getElementById('dashChartSvg');
+  const wrap=document.getElementById('dashChartWrap');
+  const tooltip=document.getElementById('dashChartTooltip');
+  const crosshair=document.getElementById('dashChartCrosshair');
+  if(!svg||!tooltip||!crosshair) return;
+  const monthNames=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const totalDays=rawCreated.length;
+  svg.addEventListener('mousemove',e=>{
+    const rect=svg.getBoundingClientRect();
+    const xRel=(e.clientX-rect.left)/rect.width*W;
+    if(xRel<padL||xRel>W-padR){tooltip.style.display='none';crosshair.setAttribute('opacity','0');return;}
+    // أقرب نقطة بيانات
+    const t=(xRel-padL)/(W-padL-padR);
+    const i=Math.min(totalDays-1,Math.max(0,Math.round(t*(totalDays-1))));
+    const d=dateLabels[i];
+    const cx=xAt(i);
+    crosshair.setAttribute('x1',cx);crosshair.setAttribute('x2',cx);crosshair.setAttribute('opacity','0.4');
+    const tooltipX=(cx/W)*rect.width;
+    const tooltipY=Math.min(yAt(rawCreated[i]),yAt(rawDone[i]))/H*rect.height;
+    tooltip.style.display='block';
+    tooltip.style.left=`${tooltipX}px`;
+    tooltip.style.top=`${Math.max(0,tooltipY-50)}px`;
+    tooltip.style.transform='translateX(-50%)';
+    tooltip.innerHTML=`<div style="font-weight:700;margin-bottom:4px">${d.getDate()} ${monthNames[d.getMonth()]}</div><div style="display:flex;gap:10px;font-size:10px"><span style="color:#A5B4FC">المنجزة: <b style="color:#fff">${rawDone[i]}</b></span><span style="color:#5EEAD4">المنشأة: <b style="color:#fff">${rawCreated[i]}</b></span></div>`;
+  });
+  svg.addEventListener('mouseleave',()=>{tooltip.style.display='none';crosshair.setAttribute('opacity','0');});
+}
+
+function setDashChartPeriod(mode){
+  if(!window._dashChartPeriod) window._dashChartPeriod={};
+  window._dashChartPeriod.mode=mode;
+  if(mode!=='custom'){window._dashChartPeriod.start=null;window._dashChartPeriod.end=null;}
+  renderDashSparkline();
+}
+
+function openDashChartCustom(){
+  if(!window._dashChartPeriod) window._dashChartPeriod={};
+  window._dashChartPeriod.mode='custom';
+  // افتراضياً: آخر 60 يوم
+  if(!window._dashChartPeriod.start){
+    const t=new Date();const s=new Date();s.setDate(t.getDate()-60);
+    window._dashChartPeriod.start=s.toISOString().split('T')[0];
+    window._dashChartPeriod.end=t.toISOString().split('T')[0];
+  }
+  renderDashSparkline();
+}
+
+function applyDashChartCustom(){
+  const s=document.getElementById('dashChartStart').value;
+  const e=document.getElementById('dashChartEnd').value;
+  if(!s||!e) return;
+  if(new Date(s)>new Date(e)) return;
+  window._dashChartPeriod={mode:'custom',start:s,end:e};
+  renderDashSparkline();
 }
 
 function renderDashTimeline(){
