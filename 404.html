@@ -5870,7 +5870,7 @@ function renderDashboardStats(){
       // المنجزة في هذا اليوم
       dailyDone.push(dn.filter(t=>{const ca=txCompletedAt(t);return ca&&ca>=ds.getTime()&&ca<de.getTime();}).length);
       // المنشأة في هذا اليوم (من كل المعاملات)
-      dailyCreated.push(all.filter(t=>{const c=t.createdAt?new Date(t.createdAt).getTime():null;return c&&c>=ds.getTime()&&c<de.getTime();}).length);
+      dailyCreated.push(tx.filter(t=>{const c=t.createdAt?new Date(t.createdAt).getTime():null;return c&&c>=ds.getTime()&&c<de.getTime();}).length);
     }
     const n=dailyDone.length;
     const W=600,H=200,padL=36,padR=14,padT=18,padB=26;
@@ -5999,8 +5999,16 @@ function renderDashTimeline(){
     projects.forEach(q=>{let r=q;let guard=0;while(r&&r.parentCode&&guard++<10){if(r.parentCode===p.code){codes.add(q.code);break;}r=projects.find(x=>x.code===r.parentCode);}});
     const ptx=all.filter(t=>codes.has(t.projCode));
     if(!ptx.length) return;
-    const starts=ptx.map(t=>t.dateStart?new Date(t.dateStart).getTime():null).filter(Boolean);
-    const ends=ptx.map(t=>t.dateEnd?new Date(t.dateEnd).getTime():null).filter(Boolean);
+    // استخدم dateStart إن وُجد، وإلا createdAt، وإلا تخطّى
+    const starts=ptx.map(t=>{
+      const d=t.dateStart||t.createdAt;
+      return d?new Date(d).getTime():null;
+    }).filter(Boolean);
+    // dateEnd للمنجزة، dueDate للنشطة، createdAt كحدّ أدنى
+    const ends=ptx.map(t=>{
+      const d=t.dateEnd||t.dueDate||t.createdAt;
+      return d?new Date(d).getTime():null;
+    }).filter(Boolean);
     if(!starts.length||!ends.length) return;
     const doneRatio=ptx.length?ptx.filter(t=>isTxDone(t)).length/ptx.length:0;
     const hasLate=ptx.some(t=>!isTxDone(t)&&t.status==='متأخرة');
