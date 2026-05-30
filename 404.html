@@ -6161,7 +6161,6 @@ function renderDashTimeline(){
   const all=(typeof isLiaison==='function'&&isLiaison()?filterTransactionsForLiaison(transactions):transactions).filter(t=>!t.hidden);
   const roots=projects.filter(p=>!p.parentCode);
 
-  // ── بناء صفوف المشاريع مع تفصيل معاملاتها ──
   const projRows=[];
   roots.forEach(p=>{
     const codes=new Set([p.code]);
@@ -6171,7 +6170,6 @@ function renderDashTimeline(){
     const doneCount=ptx.filter(t=>isTxDone(t)).length;
     const lateCount=ptx.filter(t=>!isTxDone(t)&&t.status==='متأخرة').length;
     const activeCount=ptx.length-doneCount-lateCount;
-    // تفاصيل المعاملات للصف الموسّع
     const txDetails=ptx.map(t=>{
       const s=t.dateStart||t.createdAt;
       const e=t.dateEnd||t.dueDate||t.createdAt;
@@ -6189,47 +6187,43 @@ function renderDashTimeline(){
   });
   if(!projRows.length){el.innerHTML='';return;}
 
-  // ── النطاق الزمني الكلي (لرسم أشرطة المعاملات الفرعية) ──
+  // النطاق الزمني الكلي
   let allStarts=[],allEnds=[];
   projRows.forEach(pr=>pr.txDetails.forEach(t=>{if(t.start)allStarts.push(t.start);if(t.end)allEnds.push(t.end);}));
   const minT=allStarts.length?Math.min(...allStarts):Date.now();
   const maxT=allEnds.length?Math.max(...allEnds):Date.now();
   const span=Math.max(maxT-minT,86400000);
   const fmt=ts=>{const d=new Date(ts);return d.getDate()+'/'+(d.getMonth()+1);};
+  const fmtFull=ts=>{const d=new Date(ts);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return d.getDate()+' '+m[d.getMonth()];};
 
-  // ── حفظ الحالة (أي مشروع موسّع) ──
   if(!window._dashTimelineExpanded) window._dashTimelineExpanded={};
   const expanded=window._dashTimelineExpanded;
 
-  // ── ألوان الحالات ──
   const stateColor={done:'#059669',active:'#6366F1',late:'#F59E0B'};
   const stateBg={done:'#D1FAE5',active:'#E0E7FF',late:'#FEF3C7'};
   const stateTxt={done:'#059669',active:'#4338CA',late:'#D97706'};
   const stateLabel={done:'منجزة',active:'جارية',late:'متأخرة'};
 
-  // ── بناء صف مشروع (شريط مقسّم + إمكانية التوسّع) ──
   const projHtml=projRows.map(pr=>{
     const isOpen=!!expanded[pr.code];
     const total=pr.count;
     const donePct=total?(pr.doneCount/total*100):0;
     const activePct=total?(pr.activeCount/total*100):0;
     const latePct=total?(pr.lateCount/total*100):0;
-    // الشريط المقسّم (الاتجاه أ)
-    const stackedBar=`<div style="display:flex;height:26px;border-radius:999px;overflow:hidden;box-shadow:inset 1px 1px 3px rgba(0,0,0,.1)">
-      ${donePct>0?`<div style="width:${donePct}%;background:linear-gradient(135deg,#34D399,#059669);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700" title="منجزة: ${pr.doneCount}">${donePct>=12?pr.doneCount:''}</div>`:''}
-      ${activePct>0?`<div style="width:${activePct}%;background:linear-gradient(135deg,#818CF8,#6366F1);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700" title="جارية: ${pr.activeCount}">${activePct>=12?pr.activeCount:''}</div>`:''}
-      ${latePct>0?`<div style="width:${latePct}%;background:linear-gradient(135deg,#FBBF24,#F59E0B);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700" title="متأخرة: ${pr.lateCount}">${latePct>=12?pr.lateCount:''}</div>`:''}
+    const stackedBar=`<div style="display:flex;height:24px;border-radius:999px;overflow:hidden;box-shadow:inset 1px 1px 3px rgba(0,0,0,.1)">
+      ${donePct>0?`<div style="width:${donePct}%;background:linear-gradient(135deg,#34D399,#059669);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">${donePct>=12?pr.doneCount:''}</div>`:''}
+      ${activePct>0?`<div style="width:${activePct}%;background:linear-gradient(135deg,#818CF8,#6366F1);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">${activePct>=12?pr.activeCount:''}</div>`:''}
+      ${latePct>0?`<div style="width:${latePct}%;background:linear-gradient(135deg,#FBBF24,#F59E0B);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">${latePct>=12?pr.lateCount:''}</div>`:''}
     </div>`;
-    // الصف الرئيسي
-    const mainRow=`<div onclick="toggleDashTimelineRow('${pr.code}')" style="display:grid;grid-template-columns:150px 1fr 70px;align-items:center;padding:11px 0;border-top:1px solid #DDE1E8;cursor:pointer;gap:12px;${isOpen?'background:rgba(99,102,241,.04);border-radius:8px':''}">
+    const pctLabel=total?Math.round(pr.doneCount/total*100):0;
+    const mainRow=`<div onclick="toggleDashTimelineRow('${pr.code}')" style="display:grid;grid-template-columns:200px 1fr 70px;align-items:center;padding:11px 0;border-top:1px solid #DDE1E8;cursor:pointer;gap:12px;${isOpen?'background:rgba(99,102,241,.04);border-radius:8px':''}">
       <div style="font-size:12px;font-weight:700;color:${isOpen?'#6366F1':'#0F172A'};display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-        <span style="color:${isOpen?'#6366F1':'#94A3B8'};font-size:10px;transition:transform .2s;display:inline-block;transform:rotate(${isOpen?'0':'0'}deg)">${isOpen?'▼':'◀'}</span>
+        <span style="color:${isOpen?'#6366F1':'#94A3B8'};font-size:10px">${isOpen?'▼':'◀'}</span>
         <span style="overflow:hidden;text-overflow:ellipsis">${pr.name}</span>
       </div>
       ${stackedBar}
-      <div style="font-size:11px;color:#64748B;font-family:'JetBrains Mono';text-align:center">${pr.count} معاملة</div>
+      <div style="font-size:11px;color:#64748B;font-family:'JetBrains Mono';text-align:center">${pctLabel}%</div>
     </div>`;
-    // الصفوف الفرعية (الاتجاه ج) — تظهر عند التوسّع
     let subRows='';
     if(isOpen){
       const items=pr.txDetails.map(t=>{
@@ -6238,21 +6232,25 @@ function renderDashTimeline(){
         const barStyle=t.state==='late'
           ?'background:repeating-linear-gradient(45deg,#F59E0B,#F59E0B 5px,#FCD34D 5px,#FCD34D 10px)'
           :`background:${stateColor[t.state]}`;
-        return `<div style="display:grid;grid-template-columns:160px 1fr 64px;align-items:center;padding:6px 0;gap:8px">
-          <div style="font-size:11px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.name}${t.code?' · '+t.code:''}">${t.name}</div>
-          <div style="position:relative;height:16px;background:rgba(221,225,232,.5);border-radius:8px">
-            <div style="position:absolute;right:${left}%;top:0;height:16px;width:${width}%;${barStyle};border-radius:999px"></div>
+        const dateAttr=t.start&&t.end?`data-start="${fmtFull(t.start)}" data-end="${fmtFull(t.end)}"`:'';
+        return `<div style="display:grid;grid-template-columns:200px 1fr 90px;align-items:center;padding:7px 0;gap:12px">
+          <div style="display:flex;flex-direction:column;gap:2px;white-space:nowrap;overflow:hidden">
+            <span style="font-size:11px;color:#1a1a2e;font-weight:600;overflow:hidden;text-overflow:ellipsis" title="${t.name}">${t.name}</span>
+            ${t.code?`<span style="font-size:9px;color:#94A3B8;font-family:'JetBrains Mono'">${t.code}</span>`:''}
           </div>
-          <span style="font-size:9px;background:${stateBg[t.state]};color:${stateTxt[t.state]};padding:2px 6px;border-radius:5px;text-align:center;font-weight:600;white-space:nowrap">${stateLabel[t.state]}</span>
+          <div style="position:relative;height:16px;background:rgba(221,225,232,.5);border-radius:8px">
+            <div class="dash-tl-bar" ${dateAttr} style="position:absolute;right:${left}%;top:0;height:16px;width:${width}%;${barStyle};border-radius:999px;cursor:pointer;transition:filter .15s"></div>
+          </div>
+          <span style="font-size:9px;background:${stateBg[t.state]};color:${stateTxt[t.state]};padding:3px 8px;border-radius:6px;text-align:center;font-weight:600;white-space:nowrap">${stateLabel[t.state]}</span>
         </div>`;
       }).join('');
-      subRows=`<div style="padding:4px 0 8px 20px;margin-right:20px;border-right:2px solid #C7D2FE">${items}</div>`;
+      subRows=`<div style="padding:4px 0 8px 16px;margin-right:16px;border-right:2px solid #C7D2FE">${items}</div>`;
     }
     return mainRow+subRows;
   }).join('');
 
   el.innerHTML=`
-    <div style="background:#EEF0F4;border-radius:20px;padding:20px;box-shadow:6px 6px 12px #c5c9d2,-6px -6px 12px #ffffff">
+    <div style="background:#EEF0F4;border-radius:20px;padding:20px;box-shadow:6px 6px 12px #c5c9d2,-6px -6px 12px #ffffff;position:relative">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:10px">
         <div style="display:flex;align-items:center;gap:10px">
           <div style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#34D399,#0F766E);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 9px rgba(15,118,110,.3)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg></div>
@@ -6260,9 +6258,9 @@ function renderDashTimeline(){
         </div>
         <div style="background:#EEF0F4;border-radius:9px;padding:6px 12px;box-shadow:inset 2px 2px 4px #d2d6dd,inset -2px -2px 4px #ffffff;font-size:11px;color:#475569;font-family:'JetBrains Mono'">${fmt(minT)} — ${fmt(maxT)}</div>
       </div>
-      <div style="font-size:11px;color:#94A3B8;margin-bottom:6px">انقر أي مشروع لعرض معاملاته الداخلية وحالاتها الزمنية</div>
-      <div style="display:grid;grid-template-columns:150px 1fr 70px;font-size:10px;color:#94A3B8;font-weight:700;padding:0 0 4px;gap:12px">
-        <div>المشروع</div><div style="text-align:center">نسبة الإنجاز</div><div style="text-align:center">العدد</div>
+      <div style="font-size:11px;color:#94A3B8;margin-bottom:6px">انقر أي مشروع لعرض معاملاته · مرّر الماوس على الشريط لرؤية التواريخ</div>
+      <div style="display:grid;grid-template-columns:200px 1fr 70px;font-size:10px;color:#94A3B8;font-weight:700;padding:0 0 4px;gap:12px">
+        <div>المشروع / المعاملة</div><div style="text-align:center">المدة الزمنية</div><div style="text-align:center">الإنجاز</div>
       </div>
       ${projHtml}
       <div style="display:flex;gap:16px;margin-top:14px;font-size:11px;flex-wrap:wrap;border-top:1px solid #DDE1E8;padding-top:12px">
@@ -6270,7 +6268,29 @@ function renderDashTimeline(){
         <div style="display:flex;align-items:center;gap:6px;color:#475569"><span style="width:12px;height:12px;border-radius:4px;background:linear-gradient(135deg,#818CF8,#6366F1)"></span>جارية</div>
         <div style="display:flex;align-items:center;gap:6px;color:#475569"><span style="width:12px;height:12px;border-radius:4px;background:repeating-linear-gradient(45deg,#F59E0B,#F59E0B 4px,#FCD34D 4px,#FCD34D 8px)"></span>متأخرة</div>
       </div>
+      <div id="dashTlTooltip" style="position:fixed;display:none;background:#0F172A;color:#fff;padding:7px 11px;border-radius:7px;font-size:10px;pointer-events:none;box-shadow:0 4px 12px rgba(15,23,42,.3);z-index:1000;white-space:nowrap;font-family:'IBM Plex Sans Arabic'"></div>
     </div>`;
+
+  // ── ربط تفاعلية hover للتواريخ ──
+  setTimeout(()=>{
+    const tip=document.getElementById('dashTlTooltip');
+    if(!tip) return;
+    el.querySelectorAll('.dash-tl-bar').forEach(bar=>{
+      bar.addEventListener('mouseenter',e=>{
+        const s=bar.getAttribute('data-start'),en=bar.getAttribute('data-end');
+        if(!s||!en) return;
+        bar.style.filter='brightness(1.1)';
+        tip.innerHTML=`<span style="color:#5EEAD4">${s}</span> &nbsp;←&nbsp; <span style="color:#A5B4FC">${en}</span>`;
+        tip.style.display='block';
+      });
+      bar.addEventListener('mousemove',e=>{
+        tip.style.left=(e.clientX)+'px';
+        tip.style.top=(e.clientY-36)+'px';
+        tip.style.transform='translateX(-50%)';
+      });
+      bar.addEventListener('mouseleave',()=>{bar.style.filter='';tip.style.display='none';});
+    });
+  },0);
 }
 
 function toggleDashTimelineRow(code){
