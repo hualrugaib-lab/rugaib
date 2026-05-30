@@ -6176,52 +6176,62 @@ function renderDashTimeline(){
       const isDone=isTxDone(t);
       const isLate=!isDone&&t.status==='متأخرة';
       return {
-        name:t.description||t.code||'معاملة',
+        name:t.name||t.description||t.code||'معاملة',
         code:t.code||'',
         start:s?new Date(s).getTime():null,
         end:e?new Date(e).getTime():null,
         state:isDone?'done':isLate?'late':'active'
       };
     });
-    projRows.push({code:p.code,name:p.name,count:ptx.length,doneCount,activeCount,lateCount,txDetails});
+    // نطاق المشروع الزمني = من أبكر بداية معاملة إلى أحدث نهاية
+    const pStarts=txDetails.map(t=>t.start).filter(Boolean);
+    const pEnds=txDetails.map(t=>t.end).filter(Boolean);
+    const projStart=pStarts.length?Math.min(...pStarts):null;
+    const projEnd=pEnds.length?Math.max(...pEnds):null;
+    // الحالة الغالبة للمشروع (لتلوين الشريط الرئيسي)
+    let projState='active';
+    if(lateCount>0) projState='late';
+    else if(doneCount===ptx.length) projState='done';
+    else if(doneCount>activeCount) projState='done';
+    projRows.push({code:p.code,name:p.name,count:ptx.length,doneCount,activeCount,lateCount,txDetails,projStart,projEnd,projState});
   });
   if(!projRows.length){el.innerHTML='';return;}
 
-  // النطاق الزمني الكلي
+  // النطاق الزمني الكلي (لكل الأشرطة)
   let allStarts=[],allEnds=[];
-  projRows.forEach(pr=>pr.txDetails.forEach(t=>{if(t.start)allStarts.push(t.start);if(t.end)allEnds.push(t.end);}));
+  projRows.forEach(pr=>{if(pr.projStart)allStarts.push(pr.projStart);if(pr.projEnd)allEnds.push(pr.projEnd);});
   const minT=allStarts.length?Math.min(...allStarts):Date.now();
   const maxT=allEnds.length?Math.max(...allEnds):Date.now();
   const span=Math.max(maxT-minT,86400000);
   const fmt=ts=>{const d=new Date(ts);return d.getDate()+'/'+(d.getMonth()+1);};
-  const fmtFull=ts=>{const d=new Date(ts);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return d.getDate()+' '+m[d.getMonth()];};
+  const fmtYr=ts=>{const d=new Date(ts);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];const yy=String(d.getFullYear()).slice(-2);return d.getDate()+' '+m[d.getMonth()]+' '+yy;};
 
   if(!window._dashTimelineExpanded) window._dashTimelineExpanded={};
   const expanded=window._dashTimelineExpanded;
 
   const stateColor={done:'#059669',active:'#6366F1',late:'#F59E0B'};
+  const stateGrad={done:'linear-gradient(135deg,#34D399,#059669)',active:'linear-gradient(135deg,#818CF8,#6366F1)',late:'repeating-linear-gradient(45deg,#F59E0B,#F59E0B 8px,#FCD34D 8px,#FCD34D 16px)'};
   const stateBg={done:'#D1FAE5',active:'#E0E7FF',late:'#FEF3C7'};
   const stateTxt={done:'#059669',active:'#4338CA',late:'#D97706'};
   const stateLabel={done:'منجزة',active:'جارية',late:'متأخرة'};
 
   const projHtml=projRows.map(pr=>{
     const isOpen=!!expanded[pr.code];
-    const total=pr.count;
-    const donePct=total?(pr.doneCount/total*100):0;
-    const activePct=total?(pr.activeCount/total*100):0;
-    const latePct=total?(pr.lateCount/total*100):0;
-    const stackedBar=`<div style="display:flex;height:24px;border-radius:999px;overflow:hidden;box-shadow:inset 1px 1px 3px rgba(0,0,0,.1)">
-      ${donePct>0?`<div style="width:${donePct}%;background:linear-gradient(135deg,#34D399,#059669);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">${donePct>=12?pr.doneCount:''}</div>`:''}
-      ${activePct>0?`<div style="width:${activePct}%;background:linear-gradient(135deg,#818CF8,#6366F1);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">${activePct>=12?pr.activeCount:''}</div>`:''}
-      ${latePct>0?`<div style="width:${latePct}%;background:linear-gradient(135deg,#FBBF24,#F59E0B);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">${latePct>=12?pr.lateCount:''}</div>`:''}
+    // ── الشريط الرئيسي الزمني: يبدأ من أول معاملة وينتهي بآخر معاملة ──
+    const pLeft=pr.projStart?((pr.projStart-minT)/span*100):0;
+    const pWidth=pr.projStart&&pr.projEnd?Math.max((pr.projEnd-pr.projStart)/span*100,5):5;
+    const pGrad=stateGrad[pr.projState];
+    const pDateAttr=pr.projStart&&pr.projEnd?`data-start="${fmtYr(pr.projStart)}" data-end="${fmtYr(pr.projEnd)}"`:'';
+    const pctLabel=pr.count?Math.round(pr.doneCount/pr.count*100):0;
+    const mainBar=`<div style="position:relative;height:24px;background:rgba(221,225,232,.5);border-radius:12px">
+      <div class="dash-tl-bar" ${pDateAttr} style="position:absolute;right:${pLeft}%;top:0;height:24px;width:${pWidth}%;background:${pGrad};border-radius:999px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.15);transition:filter .15s">${pWidth>=10?pr.count+' معاملة':''}</div>
     </div>`;
-    const pctLabel=total?Math.round(pr.doneCount/total*100):0;
     const mainRow=`<div onclick="toggleDashTimelineRow('${pr.code}')" style="display:grid;grid-template-columns:200px 1fr 70px;align-items:center;padding:11px 0;border-top:1px solid #DDE1E8;cursor:pointer;gap:12px;${isOpen?'background:rgba(99,102,241,.04);border-radius:8px':''}">
       <div style="font-size:12px;font-weight:700;color:${isOpen?'#6366F1':'#0F172A'};display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
         <span style="color:${isOpen?'#6366F1':'#94A3B8'};font-size:10px">${isOpen?'▼':'◀'}</span>
         <span style="overflow:hidden;text-overflow:ellipsis">${pr.name}</span>
       </div>
-      ${stackedBar}
+      ${mainBar}
       <div style="font-size:11px;color:#64748B;font-family:'JetBrains Mono';text-align:center">${pctLabel}%</div>
     </div>`;
     let subRows='';
@@ -6232,11 +6242,13 @@ function renderDashTimeline(){
         const barStyle=t.state==='late'
           ?'background:repeating-linear-gradient(45deg,#F59E0B,#F59E0B 5px,#FCD34D 5px,#FCD34D 10px)'
           :`background:${stateColor[t.state]}`;
-        const dateAttr=t.start&&t.end?`data-start="${fmtFull(t.start)}" data-end="${fmtFull(t.end)}"`:'';
+        const dateAttr=t.start&&t.end?`data-start="${fmtYr(t.start)}" data-end="${fmtYr(t.end)}"`:'';
+        // الوصف الحقيقي (t.name) على اليمين، الكود تحته — وإن تطابقا نعرض الكود فقط مرة
+        const showName=t.name&&t.name!==t.code;
         return `<div style="display:grid;grid-template-columns:200px 1fr 90px;align-items:center;padding:7px 0;gap:12px">
           <div style="display:flex;flex-direction:column;gap:2px;white-space:nowrap;overflow:hidden">
-            <span style="font-size:11px;color:#1a1a2e;font-weight:600;overflow:hidden;text-overflow:ellipsis" title="${t.name}">${t.name}</span>
-            ${t.code?`<span style="font-size:9px;color:#94A3B8;font-family:'JetBrains Mono'">${t.code}</span>`:''}
+            ${showName?`<span style="font-size:11px;color:#1a1a2e;font-weight:600;overflow:hidden;text-overflow:ellipsis" title="${t.name}">${t.name}</span>`:''}
+            ${t.code?`<span style="font-size:${showName?'9px':'11px'};color:${showName?'#94A3B8':'#1a1a2e'};font-family:'JetBrains Mono';font-weight:${showName?'400':'600'}">${t.code}</span>`:''}
           </div>
           <div style="position:relative;height:16px;background:rgba(221,225,232,.5);border-radius:8px">
             <div class="dash-tl-bar" ${dateAttr} style="position:absolute;right:${left}%;top:0;height:16px;width:${width}%;${barStyle};border-radius:999px;cursor:pointer;transition:filter .15s"></div>
@@ -6271,7 +6283,6 @@ function renderDashTimeline(){
       <div id="dashTlTooltip" style="position:fixed;display:none;background:#0F172A;color:#fff;padding:7px 11px;border-radius:7px;font-size:10px;pointer-events:none;box-shadow:0 4px 12px rgba(15,23,42,.3);z-index:1000;white-space:nowrap;font-family:'IBM Plex Sans Arabic'"></div>
     </div>`;
 
-  // ── ربط تفاعلية hover للتواريخ ──
   setTimeout(()=>{
     const tip=document.getElementById('dashTlTooltip');
     if(!tip) return;
@@ -6279,7 +6290,7 @@ function renderDashTimeline(){
       bar.addEventListener('mouseenter',e=>{
         const s=bar.getAttribute('data-start'),en=bar.getAttribute('data-end');
         if(!s||!en) return;
-        bar.style.filter='brightness(1.1)';
+        bar.style.filter='brightness(1.12)';
         tip.innerHTML=`<span style="color:#5EEAD4">${s}</span> &nbsp;←&nbsp; <span style="color:#A5B4FC">${en}</span>`;
         tip.style.display='block';
       });
