@@ -6159,79 +6159,124 @@ function renderDashTimeline(){
   const el=document.getElementById('dashTimeline');
   if(!el) return;
   const all=(typeof isLiaison==='function'&&isLiaison()?filterTransactionsForLiaison(transactions):transactions).filter(t=>!t.hidden);
-  // Group by root project, compute date span from each project's transactions
   const roots=projects.filter(p=>!p.parentCode);
-  const rows=[];
+
+  // ── بناء صفوف المشاريع مع تفصيل معاملاتها ──
+  const projRows=[];
   roots.forEach(p=>{
-    // collect codes of project + descendants
     const codes=new Set([p.code]);
     projects.forEach(q=>{let r=q;let guard=0;while(r&&r.parentCode&&guard++<10){if(r.parentCode===p.code){codes.add(q.code);break;}r=projects.find(x=>x.code===r.parentCode);}});
     const ptx=all.filter(t=>codes.has(t.projCode));
     if(!ptx.length) return;
-    // استخدم dateStart إن وُجد، وإلا createdAt، وإلا تخطّى
-    const starts=ptx.map(t=>{
-      const d=t.dateStart||t.createdAt;
-      return d?new Date(d).getTime():null;
-    }).filter(Boolean);
-    // dateEnd للمنجزة، dueDate للنشطة، createdAt كحدّ أدنى
-    const ends=ptx.map(t=>{
-      const d=t.dateEnd||t.dueDate||t.createdAt;
-      return d?new Date(d).getTime():null;
-    }).filter(Boolean);
-    if(!starts.length||!ends.length) return;
-    const doneRatio=ptx.length?ptx.filter(t=>isTxDone(t)).length/ptx.length:0;
-    const hasLate=ptx.some(t=>!isTxDone(t)&&t.status==='متأخرة');
-    rows.push({name:p.name,start:Math.min(...starts),end:Math.max(...ends),count:ptx.length,doneRatio,hasLate});
+    const doneCount=ptx.filter(t=>isTxDone(t)).length;
+    const lateCount=ptx.filter(t=>!isTxDone(t)&&t.status==='متأخرة').length;
+    const activeCount=ptx.length-doneCount-lateCount;
+    // تفاصيل المعاملات للصف الموسّع
+    const txDetails=ptx.map(t=>{
+      const s=t.dateStart||t.createdAt;
+      const e=t.dateEnd||t.dueDate||t.createdAt;
+      const isDone=isTxDone(t);
+      const isLate=!isDone&&t.status==='متأخرة';
+      return {
+        name:t.description||t.code||'معاملة',
+        code:t.code||'',
+        start:s?new Date(s).getTime():null,
+        end:e?new Date(e).getTime():null,
+        state:isDone?'done':isLate?'late':'active'
+      };
+    });
+    projRows.push({code:p.code,name:p.name,count:ptx.length,doneCount,activeCount,lateCount,txDetails});
   });
-  if(!rows.length){el.innerHTML='';return;}
-  const minT=Math.min(...rows.map(r=>r.start));
-  const maxT=Math.max(...rows.map(r=>r.end));
-  const span=Math.max(maxT-minT,1);
+  if(!projRows.length){el.innerHTML='';return;}
+
+  // ── النطاق الزمني الكلي (لرسم أشرطة المعاملات الفرعية) ──
+  let allStarts=[],allEnds=[];
+  projRows.forEach(pr=>pr.txDetails.forEach(t=>{if(t.start)allStarts.push(t.start);if(t.end)allEnds.push(t.end);}));
+  const minT=allStarts.length?Math.min(...allStarts):Date.now();
+  const maxT=allEnds.length?Math.max(...allEnds):Date.now();
+  const span=Math.max(maxT-minT,86400000);
   const fmt=ts=>{const d=new Date(ts);return d.getDate()+'/'+(d.getMonth()+1);};
-  // ── رؤوس الأسابيع والأيام ──
-  const dayLetters=['S','M','T','W','T','F','S'];
-  const weekHeader=`
-    <div style="display:grid;grid-template-columns:130px 1fr;font-size:10px;color:#94A3B8;font-weight:600;margin-bottom:6px;padding-right:6px">
-      <div style="color:#475569;font-weight:700">المعاملة</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);text-align:center">
-        <div style="border-right:1px solid #DDE1E8;padding:0 4px 4px"><div style="font-size:11px;color:#475569;font-weight:700;margin-bottom:3px">الأسبوع 1</div><div style="display:grid;grid-template-columns:repeat(7,1fr);font-size:9px;color:#94A3B8;font-family:'JetBrains Mono'">${dayLetters.map(l=>`<span>${l}</span>`).join('')}</div></div>
-        <div style="border-right:1px solid #DDE1E8;padding:0 4px 4px"><div style="font-size:11px;color:#475569;font-weight:700;margin-bottom:3px">الأسبوع 2</div><div style="display:grid;grid-template-columns:repeat(7,1fr);font-size:9px;color:#94A3B8;font-family:'JetBrains Mono'">${dayLetters.map(l=>`<span>${l}</span>`).join('')}</div></div>
-        <div style="padding:0 4px 4px"><div style="font-size:11px;color:#475569;font-weight:700;margin-bottom:3px">الأسبوع 3</div><div style="display:grid;grid-template-columns:repeat(7,1fr);font-size:9px;color:#94A3B8;font-family:'JetBrains Mono'">${dayLetters.map(l=>`<span>${l}</span>`).join('')}</div></div>
-      </div>
+
+  // ── حفظ الحالة (أي مشروع موسّع) ──
+  if(!window._dashTimelineExpanded) window._dashTimelineExpanded={};
+  const expanded=window._dashTimelineExpanded;
+
+  // ── ألوان الحالات ──
+  const stateColor={done:'#059669',active:'#6366F1',late:'#F59E0B'};
+  const stateBg={done:'#D1FAE5',active:'#E0E7FF',late:'#FEF3C7'};
+  const stateTxt={done:'#059669',active:'#4338CA',late:'#D97706'};
+  const stateLabel={done:'منجزة',active:'جارية',late:'متأخرة'};
+
+  // ── بناء صف مشروع (شريط مقسّم + إمكانية التوسّع) ──
+  const projHtml=projRows.map(pr=>{
+    const isOpen=!!expanded[pr.code];
+    const total=pr.count;
+    const donePct=total?(pr.doneCount/total*100):0;
+    const activePct=total?(pr.activeCount/total*100):0;
+    const latePct=total?(pr.lateCount/total*100):0;
+    // الشريط المقسّم (الاتجاه أ)
+    const stackedBar=`<div style="display:flex;height:26px;border-radius:999px;overflow:hidden;box-shadow:inset 1px 1px 3px rgba(0,0,0,.1)">
+      ${donePct>0?`<div style="width:${donePct}%;background:linear-gradient(135deg,#34D399,#059669);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700" title="منجزة: ${pr.doneCount}">${donePct>=12?pr.doneCount:''}</div>`:''}
+      ${activePct>0?`<div style="width:${activePct}%;background:linear-gradient(135deg,#818CF8,#6366F1);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700" title="جارية: ${pr.activeCount}">${activePct>=12?pr.activeCount:''}</div>`:''}
+      ${latePct>0?`<div style="width:${latePct}%;background:linear-gradient(135deg,#FBBF24,#F59E0B);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700" title="متأخرة: ${pr.lateCount}">${latePct>=12?pr.lateCount:''}</div>`:''}
     </div>`;
-  const barRows=rows.map(r=>{
-    const left=(r.start-minT)/span*100;
-    const width=Math.max((r.end-r.start)/span*100,6);
-    let grad,glow;
-    if(r.hasLate){grad='repeating-linear-gradient(45deg,#F59E0B,#F59E0B 8px,#FCD34D 8px,#FCD34D 16px)';glow='rgba(245,158,11,.3)';}
-    else if(r.doneRatio>=1){grad='linear-gradient(135deg,#34D399,#059669)';glow='rgba(5,150,105,.3)';}
-    else{grad='linear-gradient(135deg,#818CF8,#6366F1)';glow='rgba(99,102,241,.3)';}
-    return `<div style="display:grid;grid-template-columns:130px 1fr;align-items:center;padding:9px 0;border-top:1px solid #DDE1E8">
-      <div style="font-size:12px;font-weight:600;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:8px">${r.name}</div>
-      <div style="position:relative;height:26px;background:rgba(221,225,232,.5);border-radius:13px">
-        <div style="position:absolute;right:${left}%;top:0;height:26px;width:${width}%;background:${grad};border-radius:999px;display:flex;align-items:center;justify-content:flex-end;padding-left:7px;box-shadow:0 2px 8px ${glow}" title="${r.count} معاملة">
-          <div style="width:18px;height:18px;border-radius:50%;background:#0F172A;display:flex;align-items:center;justify-content:center;margin-right:4px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
-        </div>
+    // الصف الرئيسي
+    const mainRow=`<div onclick="toggleDashTimelineRow('${pr.code}')" style="display:grid;grid-template-columns:150px 1fr 70px;align-items:center;padding:11px 0;border-top:1px solid #DDE1E8;cursor:pointer;gap:12px;${isOpen?'background:rgba(99,102,241,.04);border-radius:8px':''}">
+      <div style="font-size:12px;font-weight:700;color:${isOpen?'#6366F1':'#0F172A'};display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        <span style="color:${isOpen?'#6366F1':'#94A3B8'};font-size:10px;transition:transform .2s;display:inline-block;transform:rotate(${isOpen?'0':'0'}deg)">${isOpen?'▼':'◀'}</span>
+        <span style="overflow:hidden;text-overflow:ellipsis">${pr.name}</span>
       </div>
+      ${stackedBar}
+      <div style="font-size:11px;color:#64748B;font-family:'JetBrains Mono';text-align:center">${pr.count} معاملة</div>
     </div>`;
+    // الصفوف الفرعية (الاتجاه ج) — تظهر عند التوسّع
+    let subRows='';
+    if(isOpen){
+      const items=pr.txDetails.map(t=>{
+        const left=t.start?((t.start-minT)/span*100):0;
+        const width=t.start&&t.end?Math.max((t.end-t.start)/span*100,4):4;
+        const barStyle=t.state==='late'
+          ?'background:repeating-linear-gradient(45deg,#F59E0B,#F59E0B 5px,#FCD34D 5px,#FCD34D 10px)'
+          :`background:${stateColor[t.state]}`;
+        return `<div style="display:grid;grid-template-columns:160px 1fr 64px;align-items:center;padding:6px 0;gap:8px">
+          <div style="font-size:11px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.name}${t.code?' · '+t.code:''}">${t.name}</div>
+          <div style="position:relative;height:16px;background:rgba(221,225,232,.5);border-radius:8px">
+            <div style="position:absolute;right:${left}%;top:0;height:16px;width:${width}%;${barStyle};border-radius:999px"></div>
+          </div>
+          <span style="font-size:9px;background:${stateBg[t.state]};color:${stateTxt[t.state]};padding:2px 6px;border-radius:5px;text-align:center;font-weight:600;white-space:nowrap">${stateLabel[t.state]}</span>
+        </div>`;
+      }).join('');
+      subRows=`<div style="padding:4px 0 8px 20px;margin-right:20px;border-right:2px solid #C7D2FE">${items}</div>`;
+    }
+    return mainRow+subRows;
   }).join('');
+
   el.innerHTML=`
     <div style="background:#EEF0F4;border-radius:20px;padding:20px;box-shadow:6px 6px 12px #c5c9d2,-6px -6px 12px #ffffff">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:10px">
         <div style="display:flex;align-items:center;gap:10px">
           <div style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#34D399,#0F766E);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 9px rgba(15,118,110,.3)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg></div>
           <span style="font-size:15px;font-weight:700;color:#0F172A">الخط الزمني للمعاملات</span>
         </div>
         <div style="background:#EEF0F4;border-radius:9px;padding:6px 12px;box-shadow:inset 2px 2px 4px #d2d6dd,inset -2px -2px 4px #ffffff;font-size:11px;color:#475569;font-family:'JetBrains Mono'">${fmt(minT)} — ${fmt(maxT)}</div>
       </div>
-      ${weekHeader}
-      ${barRows}
-      <div style="display:flex;gap:16px;margin-top:14px;font-size:11px;flex-wrap:wrap">
+      <div style="font-size:11px;color:#94A3B8;margin-bottom:6px">انقر أي مشروع لعرض معاملاته الداخلية وحالاتها الزمنية</div>
+      <div style="display:grid;grid-template-columns:150px 1fr 70px;font-size:10px;color:#94A3B8;font-weight:700;padding:0 0 4px;gap:12px">
+        <div>المشروع</div><div style="text-align:center">نسبة الإنجاز</div><div style="text-align:center">العدد</div>
+      </div>
+      ${projHtml}
+      <div style="display:flex;gap:16px;margin-top:14px;font-size:11px;flex-wrap:wrap;border-top:1px solid #DDE1E8;padding-top:12px">
+        <div style="display:flex;align-items:center;gap:6px;color:#475569"><span style="width:12px;height:12px;border-radius:4px;background:linear-gradient(135deg,#34D399,#059669)"></span>منجزة</div>
         <div style="display:flex;align-items:center;gap:6px;color:#475569"><span style="width:12px;height:12px;border-radius:4px;background:linear-gradient(135deg,#818CF8,#6366F1)"></span>جارية</div>
-        <div style="display:flex;align-items:center;gap:6px;color:#475569"><span style="width:12px;height:12px;border-radius:4px;background:linear-gradient(135deg,#34D399,#059669)"></span>مكتملة</div>
-        <div style="display:flex;align-items:center;gap:6px;color:#475569"><span style="width:12px;height:12px;border-radius:4px;background:repeating-linear-gradient(45deg,#F59E0B,#F59E0B 4px,#FCD34D 4px,#FCD34D 8px)"></span>بها متأخرات</div>
+        <div style="display:flex;align-items:center;gap:6px;color:#475569"><span style="width:12px;height:12px;border-radius:4px;background:repeating-linear-gradient(45deg,#F59E0B,#F59E0B 4px,#FCD34D 4px,#FCD34D 8px)"></span>متأخرة</div>
       </div>
     </div>`;
+}
+
+function toggleDashTimelineRow(code){
+  if(!window._dashTimelineExpanded) window._dashTimelineExpanded={};
+  window._dashTimelineExpanded[code]=!window._dashTimelineExpanded[code];
+  renderDashTimeline();
 }
 
 function _legacySparkline_unused(weeklyDone,dailyAvg,totalRecent,avgDays,maxBar){
