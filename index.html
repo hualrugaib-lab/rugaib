@@ -1461,7 +1461,7 @@ body::after{
       <div class="fsep"></div>
       <div class="fsec">👤 تكليف موظف</div>
       <div class="frow">
-        <div class="fg"><label class="flbl">الموظف المكلَّف</label><select class="fsel" id="txAssignee"><option value="">— بدون تكليف —</option></select></div>
+        <div class="fg"><label class="flbl">👥 المكلَّفون (شخص أو أكثر)</label><div id="txAssignees" data-open="0"></div></div>
         <div class="fg"><label class="flbl">موعد الإنجاز</label><input class="finp" type="date" id="txAssignDue"></div>
       </div>
       <div class="fg"><label class="flbl">نص الرسالة للموظف</label><textarea class="fta" id="txAssignMsg" placeholder="تم تكليفك بإنهاء…" style="min-height:55px"></textarea></div>
@@ -2045,8 +2045,8 @@ body::after{
       </div>
 
       <div class="fg">
-        <label class="flbl">👤 الموظف المُكلَّف *</label>
-        <select class="fsel" id="aaEmployee"></select>
+        <label class="flbl">👥 المُكلَّفون * (شخص أو أكثر)</label>
+        <div id="aaAssignees" data-open="0"></div>
       </div>
 
       <div class="fg">
@@ -2240,8 +2240,8 @@ body::after{
           </select>
         </div>
         <div class="fg">
-          <label class="flbl">👥 إعادة تكليف</label>
-          <select class="fsel" id="stepReasgn"><option value="">— لا تغيير —</option></select>
+          <label class="flbl">👥 إعادة تكليف (شخص أو أكثر)</label>
+          <div id="stepReasgnPicker" data-open="0"></div>
         </div>
       </div>
 
@@ -2734,7 +2734,7 @@ function downloadDailyTimeTemplate(){
   const role=currentUser?.role||'employee';
   let myTxs=transactions.filter(t=>!t.hidden);
   if(role==='employee'){
-    myTxs=myTxs.filter(t=>t.assignee===currentUser.email||t.assignedByEmail===currentUser.email);
+    myTxs=myTxs.filter(t=>isAssigneeOf(t,currentUser.email)||t.assignedByEmail===currentUser.email);
   }
   myTxs=myTxs.filter(t=>!isTxDone(t)||(txCompletedAt(t)&&(Date.now()-txCompletedAt(t))<14*86400000));
   myTxs=myTxs.slice(0,150); // Limit to first 150
@@ -3539,7 +3539,7 @@ function openQuickTimeEntry(existingEntry){
   // Populate transaction codes
   const role=currentUser?.role||'employee';
   let myTxs=transactions.filter(t=>!t.hidden);
-  if(role==='employee') myTxs=myTxs.filter(t=>t.assignee===currentUser.email||t.assignedByEmail===currentUser.email);
+  if(role==='employee') myTxs=myTxs.filter(t=>isAssigneeOf(t,currentUser.email)||t.assignedByEmail===currentUser.email);
   myTxs=myTxs.filter(t=>!isTxDone(t)||(txCompletedAt(t)&&(Date.now()-txCompletedAt(t))<14*86400000));
   const txList=document.getElementById('qtTxList');
   txList.innerHTML=myTxs.map(t=>`<option value="${t.code}">${t.code} — ${t.name}</option>`).join('');
@@ -4730,9 +4730,57 @@ function isTxOpen(t){
   return !isTxDone(t);
 }
 
+// ════════════════════════════════════════════════════════════
+// MULTI-ASSIGNEE HELPERS (مع طبقة توافق مع assignee القديم)
+// ════════════════════════════════════════════════════════════
+// يُرجع قائمة بريد كل المكلّفين (يدعم القديم assignee والجديد assignees)
+function getAssignees(t){
+  if(!t) return [];
+  if(Array.isArray(t.assignees)&&t.assignees.length) return t.assignees.filter(Boolean);
+  if(t.assignee) return [t.assignee];
+  return [];
+}
+// يضبط قائمة المكلّفين ويحافظ على assignee=الأول للتوافق مع الكود القديم
+function setAssignees(t,list){
+  const clean=(list||[]).filter(Boolean);
+  // إزالة التكرار مع الحفاظ على الترتيب
+  const uniq=[...new Set(clean)];
+  t.assignees=uniq;
+  t.assignee=uniq.length?uniq[0]:null; // طبقة التوافق: assignee = المكلّف الأول
+  return t;
+}
+// هل البريد المحدّد من ضمن مكلّفي المعاملة؟
+function isAssigneeOf(t,email){
+  if(!email) return false;
+  return getAssignees(t).includes(email);
+}
+// أسماء المكلّفين كنص مقروء (للعرض)
+function assigneeNames(t){
+  const list=getAssignees(t);
+  if(!list.length) return '';
+  return list.map(e=>{const u=users.find(x=>x.email===e);return u?u.name:e;}).join('، ');
+}
+// HTML لشارات المكلّفين (avatars متراكبة + أسماء)
+function assigneeBadges(t,opts){
+  opts=opts||{};
+  const list=getAssignees(t);
+  if(!list.length) return '';
+  const max=opts.max||3;
+  const shown=list.slice(0,max);
+  const extra=list.length-shown.length;
+  const avatars=shown.map((e,i)=>{
+    const u=users.find(x=>x.email===e);
+    const nm=u?u.name:e;
+    const initials=nm.split(' ').slice(0,2).map(w=>w[0]||'').join('');
+    return `<span title="${nm}" style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#818CF8,#6366F1);color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;border:2px solid #EEF0F4;margin-right:${i>0?'-7px':'0'};position:relative;z-index:${10-i}">${initials}</span>`;
+  }).join('');
+  const extraBadge=extra>0?`<span style="width:22px;height:22px;border-radius:50%;background:#CBD5E1;color:#475569;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;border:2px solid #EEF0F4;margin-right:-7px">+${extra}</span>`:'';
+  return `<span style="display:inline-flex;align-items:center">${avatars}${extraBadge}</span>`;
+}
+
 function isAssignedOpen(t){
   // Task is assigned to someone AND still open
-  return t&&t.assignee&&isTxOpen(t)&&!t.hidden;
+  return t&&getAssignees(t).length>0&&isTxOpen(t)&&!t.hidden;
 }
 
 function txCompletedAt(t){
@@ -4806,37 +4854,43 @@ function sendOutlookEmail(toEmail,subject,body){
 }
 
 function notifyAssignment(t){
-  if(!t.assignee) return;
-  const assigneeUser=users.find(u=>u.email===t.assignee);
-  if(!assigneeUser) return;
+  const assignees=getAssignees(t);
+  if(!assignees.length) return;
   const projName=projects.find(p=>p.code===t.projCode)?.name||t.projCode;
   const subject=`[تكليف جديد] ${t.code} — ${t.name}`;
-  const lines=[
-    `السلام عليكم ${assigneeUser.name}،`,
-    '',
-    `تم تكليفك بمعاملة جديدة في نظام إدارة المعاملات.`,
-    '',
-    '═══ تفاصيل المعاملة ═══',
-    `• كود المعاملة: ${t.code}`,
-    `• اسم المعاملة: ${t.name}`,
-    `• المشروع: ${projName}`,
-    `• الجهة الحكومية: ${t.agency||'-'}`,
-    `• الغرض: ${t.purpose||'-'}`,
-    t.assignDue?`• الموعد المقترح للإنجاز: ${t.assignDue}`:'',
-    t.assignMsg?`
+  // إرسال إشعار لكل مكلّف
+  assignees.forEach(email=>{
+    const assigneeUser=users.find(u=>u.email===email);
+    if(!assigneeUser) return;
+    const otherAssignees=assignees.filter(e=>e!==email).map(e=>{const u=users.find(x=>x.email===e);return u?u.name:e;});
+    const lines=[
+      `السلام عليكم ${assigneeUser.name}،`,
+      '',
+      `تم تكليفك بمعاملة جديدة في نظام إدارة المعاملات.`,
+      otherAssignees.length?`(بالاشتراك مع: ${otherAssignees.join('، ')})`:'',
+      '',
+      '═══ تفاصيل المعاملة ═══',
+      `• كود المعاملة: ${t.code}`,
+      `• اسم المعاملة: ${t.name}`,
+      `• المشروع: ${projName}`,
+      `• الجهة الحكومية: ${t.agency||'-'}`,
+      `• الغرض: ${t.purpose||'-'}`,
+      t.assignDue?`• الموعد المقترح للإنجاز: ${t.assignDue}`:'',
+      t.assignMsg?`
 رسالة المُسنِد:
 ${t.assignMsg}`:'',
-    '',
-    '═══════════════════',
-    `يرجى الدخول للنظام لمتابعة التنفيذ:`,
-    `https://hualrugaib-lab.github.io/rugaib/`,
-    '',
-    `أُسنِدت بواسطة: ${currentUser?currentUser.name:'النظام'}`,
-    '',
-    'مع التحية،',
-    'نظام إدارة المعاملات — الرقيب القابضة'
-  ].filter(Boolean).join('\n');
-  sendOutlookEmail(t.assignee,subject,lines);
+      '',
+      '═══════════════════',
+      `يرجى الدخول للنظام لمتابعة التنفيذ:`,
+      `https://hualrugaib-lab.github.io/rugaib/`,
+      '',
+      `أُسنِدت بواسطة: ${currentUser?currentUser.name:'النظام'}`,
+      '',
+      'مع التحية،',
+      'نظام إدارة المعاملات — الرقيب القابضة'
+    ].filter(Boolean).join('\n');
+    sendOutlookEmail(email,subject,lines);
+  });
 }
 
 function notifyCompletion(t){
@@ -5639,10 +5693,10 @@ function renderDash(){
   const asgTx=transactions.filter(t=>isAssignedOpen(t)).slice(0,5);
   if(!asgTx.length){asgEl.innerHTML='<p style="text-align:center;color:var(--sub);font-size:12px;padding:16px">لا توجد مهام موكلة مفتوحة</p>';
   } else asgEl.innerHTML=asgTx.map(t=>{
-    const u=users.find(x=>x.email===t.assignee);
+    const badges=assigneeBadges(t,{max:3});
     const since=t.assignedAt?timeSince(t.assignedAt):'';
     return `<div class="tx-item" onclick="openTxDetail('${t.id}')">
-      <div style="display:flex;align-items:center;gap:8px"><span class="tx-code">${t.code}</span><span class="tx-name" style="flex:1;font-size:12px">${t.name}</span><span style="font-size:10px;color:var(--sub)">${u?.name||''}</span><span style="font-size:10px;color:var(--sub)">${since}</span></div>
+      <div style="display:flex;align-items:center;gap:8px"><span class="tx-code">${t.code}</span><span class="tx-name" style="flex:1;font-size:12px">${t.name}</span>${badges}<span style="font-size:10px;color:var(--sub)">${since}</span></div>
     </div>`;}).join('');
 
   // New dynamic dashboard
@@ -6984,8 +7038,7 @@ function openCreateTx(projCode,fromEmployee){
     yearOpts.push(`<option value="${yy}" ${yr===curYr?'selected':''}>${yr}</option>`);
   }
   ySel.innerHTML=yearOpts.join('');
-  const aSel=document.getElementById('txAssignee');
-  aSel.innerHTML='<option value="">— بدون تكليف —</option>'+users.filter(u=>u.role!=='executive').map(u=>`<option value="${u.email}">${u.name}</option>`).join('');
+  initAssigneePicker('txAssignees', []);
   // Two-step parent picker: Project → Transaction
   const pProjSel=document.getElementById('txParentProjSel');
   const pTxSel=document.getElementById('txParentSel');
@@ -7312,7 +7365,8 @@ function saveTx(){
   const code=updateTxCode();
   const projObj=projects.find(p=>p.code===proj);
   const issueCode=resolveIssueCode(document.getElementById('txIssueSel').value);
-  const assignee=document.getElementById('txAssignee').value;
+  const assigneeList=getAssigneePickerValue('txAssignees');
+  const assignee=assigneeList.length?assigneeList[0]:null;
   const tx={
     id:'tx_'+Date.now(),code,name,
     proj:projObj?.name||proj,projCode:proj,issueCode,
@@ -7323,6 +7377,7 @@ function saveTx(){
     dateStart:document.getElementById('txDateStart').value,
     dateEnd:document.getElementById('txDateEnd').value,
     assignee:assignee||null,
+    assignees:assigneeList.length?assigneeList:[],
     assignDue:document.getElementById('txAssignDue').value,
     assignMsg:document.getElementById('txAssignMsg').value,
     assignedAt:assignee?Date.now():null,
@@ -7437,10 +7492,16 @@ function openTxDetail(id){
   renderStepsTabDetail(t);
 
   // Assign tab
-  const emp=t.assignee?users.find(u=>u.email===t.assignee):null;
+  const allAssignees=getAssignees(t);
   const timerHtml=t.assignedAt&&!t.closedTask?`<div style="background:var(--navy);border-radius:10px;padding:12px 16px;margin-top:12px;display:flex;align-items:center;gap:14px"><div><div style="font-size:9px;color:#64748B">مدة التكليف</div><div id="timerD" style="font-family:'JetBrains Mono';font-size:16px;font-weight:700;color:#fff">—</div></div><div style="flex:1"></div><button class="btn bg_ bsm" onclick="openCloseTask('${t.id}')">إغلاق المهمة ✓</button></div>`:
     t.closedTask?`<div style="background:var(--lgreen);border:1px solid #BBF7D0;border-radius:10px;padding:10px 14px;margin-top:10px;font-size:12px;color:var(--green)">✅ تم إغلاق المهمة — ${t.closeNote||''}</div>`:'';
-  document.getElementById('dp-asgn').innerHTML=emp?`<div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--lgray);border-radius:12px"><div style="width:40px;height:40px;border-radius:50%;background:var(--lblue);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700">${emp.name.substring(0,2)}</div><div><strong style="font-size:13px;display:block">${emp.name}</strong><span style="font-size:11px;color:var(--sub)">${emp.email}</span></div>${t.assignDue?`<div style="margin-right:auto;font-size:11px;color:var(--sub)">موعد: ${t.assignDue}</div>`:''}</div>${t.assignMsg?`<div style="margin-top:10px;background:var(--lgray);border-radius:10px;padding:10px 14px;font-size:12px;line-height:1.7">${t.assignMsg}</div>`:'' }${timerHtml}`:`<p style="font-size:13px;color:var(--sub)">لا يوجد تكليف</p>`;
+  const assigneeCards=allAssignees.map((email,i)=>{
+    const u=users.find(x=>x.email===email);
+    const nm=u?u.name:email;
+    const isPrimary=i===0&&allAssignees.length>1;
+    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--lgray);border-radius:12px;${i>0?'margin-top:8px':''}"><div style="width:40px;height:40px;border-radius:50%;background:var(--lblue);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700">${nm.substring(0,2)}</div><div style="flex:1"><strong style="font-size:13px;display:block">${nm}${isPrimary?' <span style="font-size:9px;color:var(--blue);font-weight:600">★ مسؤول رئيسي</span>':''}</strong><span style="font-size:11px;color:var(--sub)">${u?u.email:email}</span></div></div>`;
+  }).join('');
+  document.getElementById('dp-asgn').innerHTML=allAssignees.length?`${allAssignees.length>1?`<div style="font-size:11px;color:var(--sub);margin-bottom:8px">👥 ${allAssignees.length} مكلّفين</div>`:''}${assigneeCards}${t.assignDue?`<div style="margin-top:8px;font-size:11px;color:var(--sub)">📅 الموعد: ${t.assignDue}</div>`:''}${t.assignMsg?`<div style="margin-top:10px;background:var(--lgray);border-radius:10px;padding:10px 14px;font-size:12px;line-height:1.7">${t.assignMsg}</div>`:'' }${timerHtml}`:`<p style="font-size:13px;color:var(--sub)">لا يوجد تكليف</p>`;
   if(t.assignedAt&&!t.closedTask) startTimer(t.assignedAt);
 
   // Sub-transactions tab
@@ -7539,7 +7600,7 @@ function renderStepsTabDetail(t){
   const stepsList=t.steps||[];
   const isManager=currentUser&&currentUser.role==='manager';
   const isEditor=currentUser&&currentUser.role==='editor';
-  const isAssignee=currentUser&&t.assignee===currentUser.email;
+  const isAssignee=currentUser&&isAssigneeOf(t,currentUser.email);
   const canConfirm=isManager||isEditor||isAssignee;
   const allCompleted=stepsList.length>0&&stepsList.every(s=>s.completed);
 
@@ -7637,7 +7698,7 @@ function toggleStepComplete(txId,stepIdx){
   if(!t||!t.steps||!t.steps[stepIdx]) return;
   const isManager=currentUser&&currentUser.role==='manager';
   const isEditor=currentUser&&currentUser.role==='editor';
-  const isAssignee=currentUser&&t.assignee===currentUser.email;
+  const isAssignee=currentUser&&isAssigneeOf(t,currentUser.email);
   if(!isManager&&!isEditor&&!isAssignee){toast('🚫 ليس لديك صلاحية','er');return;}
   t.steps[stepIdx].completed=!t.steps[stepIdx].completed;
   if(t.steps[stepIdx].completed){
@@ -7763,9 +7824,8 @@ function activateAndAssign(txId){
   // Show assign modal
   window._activateAssignId=txId;
 
-  // Reset modal fields
-  const empSel=document.getElementById('aaEmployee');
-  if(empSel) empSel.innerHTML='<option value="">— اختر موظف —</option>'+users.filter(u=>u.role==='employee'||u.role==='editor').map(u=>`<option value="${u.email}">${u.name}</option>`).join('');
+  // Reset modal fields — تهيئة منتقي المكلّفين (يبدأ فارغاً أو بالمكلّفين الحاليين)
+  initAssigneePicker('aaAssignees', getAssignees(t));
   const noteEl=document.getElementById('aaNote');
   if(noteEl) noteEl.value=`تفعيل وتجديد ${t.name} (${t.code})`;
   const dueEl=document.getElementById('aaDue');
@@ -7786,23 +7846,24 @@ function confirmActivateAssign(){
   const t=transactions.find(x=>x.id===txId);
   if(!t) return;
 
-  const empEmail=document.getElementById('aaEmployee').value;
+  const assigneeList=getAssigneePickerValue('aaAssignees');
   const note=document.getElementById('aaNote').value.trim();
   const due=document.getElementById('aaDue').value;
-  if(!empEmail){toast('اختر الموظف','er');return;}
+  if(!assigneeList.length){toast('اختر مكلّفاً واحداً على الأقل','er');return;}
 
   // Reactivate transaction
   markTxOpen(t);
   t.status='تحت الإجراء';
-  t.assignee=empEmail;
+  setAssignees(t,assigneeList);
   t.assignedAt=Date.now();
   t.assignedByEmail=currentUser.email;
   t.assignedByName=currentUser.name;
   if(due) t.assignDue=due;
   if(!t.steps) t.steps=[];
+  const assigneeNamesStr=assigneeNames(t);
   t.steps.push({
     type:'update',
-    text:note||'تم تفعيل المعاملة وإسنادها',
+    text:note||`تم تفعيل المعاملة وإسنادها إلى ${assigneeNamesStr}`,
     date:now_(),
     by:currentUser.name,
     byEmail:currentUser.email,
@@ -7810,7 +7871,7 @@ function confirmActivateAssign(){
   });
 
   ss('v4_tx',transactions);
-  toast(`✅ تم التفعيل وإسناده إلى ${users.find(u=>u.email===empEmail)?.name||empEmail}`,'ok');
+  toast(`✅ تم التفعيل وإسناده إلى ${assigneeNamesStr}`,'ok');
   closeModal('mActivateAssign');
   setTimeout(()=>notifyAssignment(t),300);
   renderAlerts&&renderAlerts();
@@ -8952,7 +9013,7 @@ function updateStepStatus(txId,stepIdx,newStatus){
   if(!t||!t.steps||!t.steps[stepIdx]) return;
   const isManager=currentUser&&currentUser.role==='manager';
   const isEditor=currentUser&&currentUser.role==='editor';
-  const isAssignee=currentUser&&t.assignee===currentUser.email;
+  const isAssignee=currentUser&&isAssigneeOf(t,currentUser.email);
   if(!isManager&&!isEditor&&!isAssignee){toast('🚫 ليس لديك صلاحية','er');return;}
   t.steps[stepIdx].status=newStatus;
   if(newStatus==='منجزة'){
@@ -9234,8 +9295,7 @@ function openAddStep(id){
   }
   const reasonEl=document.getElementById('pendingReason');if(reasonEl)reasonEl.value='';
   const reasonWrap=document.getElementById('pendingReasonWrap');if(reasonWrap)reasonWrap.style.display='none';
-  const raEl=document.getElementById('stepReasgn');
-  if(raEl)raEl.innerHTML='<option value="">— لا تغيير —</option>'+users.map(u=>`<option value="${u.email}">${u.name}</option>`).join('');
+  initAssigneePicker('stepReasgnPicker', getAssignees(t));
   // Clear new link attachment fields
   const sName=document.getElementById('stepAttName');if(sName)sName.value='';
   const sUrl=document.getElementById('stepAttUrl');if(sUrl)sUrl.value='';
@@ -9251,7 +9311,9 @@ function saveStep(){
   const t=transactions.find(x=>x.id===stepForId);
   if(!t) return;
   const nst=document.getElementById('stepSt').value;
-  const nra=document.getElementById('stepReasgn').value;
+  const newAssignees=getAssigneePickerValue('stepReasgnPicker');
+  const oldAssignees=getAssignees(t);
+  const reasgnChanged=JSON.stringify([...newAssignees].sort())!==JSON.stringify([...oldAssignees].sort());
   const pendingReason=document.getElementById('pendingReason')?.value.trim()||'';
   // Type='update' = an information update, NOT a workflow milestone
   const step={
@@ -9282,13 +9344,13 @@ function saveStep(){
   }
   t.steps.push(step);
   if(nst) t.status=nst;
-  if(nra){
-    t.assignee=nra;
+  if(reasgnChanged&&newAssignees.length){
+    setAssignees(t,newAssignees);
     t.assignedAt=Date.now();
     t.assignedByEmail=currentUser?currentUser.email:null;
     t.assignedByName=currentUser?currentUser.name:null;
     t.closedTask=false;
-    toast(`📧 إعادة تكليف إلى ${users.find(u=>u.email===nra)?.name||nra}`,'ok');
+    toast(`📧 إعادة تكليف إلى ${assigneeNames(t)}`,'ok');
     setTimeout(()=>notifyAssignment(t),300);
   }
   ss('v4_tx',transactions);
@@ -10043,8 +10105,7 @@ function openViewerNote(txId){
   document.getElementById('stepNote').value='';
   document.getElementById('stepSt').value='';
   document.getElementById('stepSt').disabled=true;
-  document.getElementById('stepReasgn').innerHTML='<option value="">—</option>';
-  document.getElementById('stepReasgn').disabled=true;
+  initAssigneePicker('stepReasgnPicker', []);
   document.getElementById('stepFilePrev').innerHTML='';
   // Change title
   const h2=document.querySelector('#mAddStep .mhdr h2');
@@ -12574,6 +12635,81 @@ function getExpiring(){return transactions.filter(t=>t.dateEnd&&daysLeft(t.dateE
 // ══════════════════════════════════════════════════════════════════
 // MODAL HELPERS
 // ══════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// MULTI-ASSIGNEE PICKER COMPONENT (مكوّن اختيار متعدد قابل لإعادة الاستخدام)
+// ════════════════════════════════════════════════════════════
+// حالة كل مُنتقي (key = containerId): قائمة البريد المختار
+window._assigneePickers=window._assigneePickers||{};
+
+// تهيئة منتقي: containerId = id العنصر، initial = قائمة بريد مبدئية، roleFilter اختياري
+function initAssigneePicker(containerId, initial){
+  window._assigneePickers[containerId]=[...(initial||[]).filter(Boolean)];
+  renderAssigneePicker(containerId);
+}
+// قراءة المختارين من منتقي
+function getAssigneePickerValue(containerId){
+  return [...(window._assigneePickers[containerId]||[])];
+}
+// رسم المنتقي بالكامل
+function renderAssigneePicker(containerId){
+  const wrap=document.getElementById(containerId);
+  if(!wrap) return;
+  const selected=window._assigneePickers[containerId]||[];
+  const eligible=users.filter(u=>u.role==='employee'||u.role==='editor'||u.role==='manager');
+  const initials=nm=>nm.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]||'').join('');
+  // شارات المختارين
+  const chips=selected.map((email,i)=>{
+    const u=users.find(x=>x.email===email);
+    const nm=u?u.name:email;
+    const isPrimary=i===0;
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#818CF8,#6366F1);color:#fff;font-size:11px;font-weight:600;padding:5px 10px;border-radius:8px">
+      ${isPrimary?'<span title="المسؤول الرئيسي" style="font-size:10px">★</span>':''}${nm}
+      <span onclick="event.stopPropagation();removeAssigneePick('${containerId}','${email}')" style="cursor:pointer;font-size:14px;opacity:0.85;line-height:1">×</span>
+    </span>`;
+  }).join('');
+  const placeholder=selected.length?'':'<span style="color:#94A3B8;font-size:11px;padding:4px">+ اختر موظف أو أكثر...</span>';
+  // قائمة الخيارات
+  const opts=eligible.map(u=>{
+    const on=selected.includes(u.email);
+    const roleLabel=u.role==='manager'?'مدير':u.role==='editor'?'محرر':'موظف';
+    return `<div onclick="toggleAssigneePick('${containerId}','${u.email}')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;${on?'background:#F1F5F9':''}" onmouseover="this.style.background='#F8FAFC'" onmouseout="this.style.background='${on?'#F1F5F9':'transparent'}'">
+      <div style="width:18px;height:18px;border-radius:5px;${on?'background:linear-gradient(135deg,#6366F1,#4338CA)':'background:#EEF0F4;box-shadow:inset 1px 1px 3px #d2d6dd'};display:flex;align-items:center;justify-content:center;flex-shrink:0">${on?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M5 12l5 5L20 7"/></svg>':''}</div>
+      <span style="width:26px;height:26px;border-radius:50%;background:${on?'linear-gradient(135deg,#818CF8,#6366F1)':'#CBD5E1'};color:${on?'#fff':'#475569'};font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${initials(u.name)}</span>
+      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}</div><div style="font-size:10px;color:#94A3B8">${roleLabel}</div></div>
+    </div>`;
+  }).join('');
+  const isOpen=wrap.getAttribute('data-open')==='1';
+  wrap.innerHTML=`
+    <div onclick="toggleAssigneePickerOpen('${containerId}')" style="background:#EEF0F4;border-radius:12px;padding:10px;box-shadow:inset 2px 2px 5px #d2d6dd,inset -2px -2px 5px #ffffff;min-height:24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;cursor:pointer">
+      ${chips}${placeholder}
+    </div>
+    <div style="position:relative">
+      <div style="display:${isOpen?'block':'none'};position:absolute;top:6px;right:0;left:0;background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:240px;overflow-y:auto;z-index:50">
+        ${opts||'<div style="padding:12px;color:#94A3B8;font-size:11px;text-align:center">لا يوجد موظفون</div>'}
+      </div>
+    </div>
+    ${selected.length?'<div style="font-size:10px;color:#94A3B8;margin-top:6px">★ المختار الأول هو المسؤول الرئيسي</div>':''}`;
+}
+function toggleAssigneePickerOpen(containerId){
+  const wrap=document.getElementById(containerId);
+  if(!wrap) return;
+  const isOpen=wrap.getAttribute('data-open')==='1';
+  wrap.setAttribute('data-open',isOpen?'0':'1');
+  renderAssigneePicker(containerId);
+}
+function toggleAssigneePick(containerId,email){
+  const list=window._assigneePickers[containerId]||[];
+  const idx=list.indexOf(email);
+  if(idx>=0) list.splice(idx,1); else list.push(email);
+  window._assigneePickers[containerId]=list;
+  renderAssigneePicker(containerId);
+}
+function removeAssigneePick(containerId,email){
+  const list=window._assigneePickers[containerId]||[];
+  window._assigneePickers[containerId]=list.filter(e=>e!==email);
+  renderAssigneePicker(containerId);
+}
+
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.mb').forEach(bg=>{bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open');});});
