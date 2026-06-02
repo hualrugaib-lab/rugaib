@@ -1117,6 +1117,7 @@ body::after{
             <input type="date" id="repFrom" onchange="renderReport()" style="padding:8px 12px;border:1px solid #CBD5E1;border-radius:8px;font-family:inherit;font-size:12px;display:none">
             <input type="date" id="repTo" onchange="renderReport()" style="padding:8px 12px;border:1px solid #CBD5E1;border-radius:8px;font-family:inherit;font-size:12px;display:none">
             <button onclick="exportAllXLSX()" style="padding:8px 14px;border:none;border-radius:8px;background:#475569;color:#fff;font-family:inherit;font-size:12px;cursor:pointer;font-weight:600">↓ تصدير Excel</button>
+            <button onclick="generateOneClickReport()" style="padding:8px 16px;border:none;border-radius:8px;background:linear-gradient(135deg,#34D399,#059669);color:#fff;font-family:inherit;font-size:12px;cursor:pointer;font-weight:700;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(5,150,105,.25)">⚡ التقرير التنفيذي</button>
           </div>
         </div>
 
@@ -1848,6 +1849,22 @@ body::after{
         <div class="fg">
           <label class="flbl">نوع الوثيقة (اختياري)</label>
           <input type="text" class="finp" id="vmDocType" placeholder="مثال: رخصة بناء، شهادة، تصريح...">
+        </div>
+      </div>
+      <!-- قسم اكتساب القطعية — يظهر فقط لمعاملات التسجيل العيني (RER) -->
+      <div id="vmQatiyyaSection" style="display:none;margin-top:14px;padding:16px;background:linear-gradient(135deg,#ECFDF5,#F0FDF4);border:1px solid #6EE7B7;border-radius:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:18px">⚖️</span>
+          <span style="font-size:13px;font-weight:700;color:#065F46">اكتساب القطعية (للتسجيل العيني)</span>
+        </div>
+        <div style="font-size:11px;color:#047857;margin-bottom:12px;line-height:1.6">أدخل تاريخ انتهاء التسجيل الفعلي. سيحسب النظام تاريخ اكتساب القطعية تلقائياً (بعد عام ميلادي كامل).</div>
+        <div class="fg">
+          <label class="flbl" style="color:#065F46">تاريخ انتهاء التسجيل الفعلي</label>
+          <input type="date" class="finp" id="vmRegEndDate" onchange="updateQatiyyaPreview()" style="border-color:#6EE7B7">
+        </div>
+        <div id="vmQatiyyaPreview" style="display:none;margin-top:10px;padding:10px 14px;background:#fff;border-radius:9px;border:1px solid #A7F3D0">
+          <div style="font-size:10px;color:#64748B;margin-bottom:3px">تاريخ اكتساب القطعية المتوقّع</div>
+          <div id="vmQatiyyaDate" style="font-size:15px;font-weight:800;color:#059669;font-family:'JetBrains Mono'">—</div>
         </div>
       </div>
     </div>
@@ -7774,12 +7791,43 @@ function openValidityModal(tx){
     document.getElementById('vmValidityFields').style.display='block';
   }
   if(tx.docType) document.getElementById('vmDocType').value=tx.docType;
+  // إظهار قسم القطعية فقط لمعاملات التسجيل العيني (RER)
+  const qatiyyaSection=document.getElementById('vmQatiyyaSection');
+  if(qatiyyaSection){
+    const isRER=tx.issueCode==='RER';
+    qatiyyaSection.style.display=isRER?'block':'none';
+    if(isRER){
+      const regEl=document.getElementById('vmRegEndDate');
+      if(regEl) regEl.value=tx.registrationEndDate||'';
+      updateQatiyyaPreview();
+    }
+  }
   openModal('mValidity');
 }
 
 function switchValidityCalendar(type){
   document.getElementById('vmGregorianFields').style.display=type==='gregorian'?'flex':'none';
   document.getElementById('vmHijriFields').style.display=type==='hijri'?'flex':'none';
+}
+
+// حساب تاريخ القطعية = تاريخ انتهاء التسجيل + سنة ميلادية كاملة
+function computeQatiyyaDate(regEndDate){
+  if(!regEndDate) return null;
+  const d=new Date(regEndDate);
+  if(isNaN(d.getTime())) return null;
+  d.setFullYear(d.getFullYear()+1);
+  return d;
+}
+function updateQatiyyaPreview(){
+  const v=document.getElementById('vmRegEndDate')?.value;
+  const prev=document.getElementById('vmQatiyyaPreview');
+  const dateEl=document.getElementById('vmQatiyyaDate');
+  if(!prev||!dateEl) return;
+  const q=computeQatiyyaDate(v);
+  if(!q){prev.style.display='none';return;}
+  const arMonths=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  dateEl.textContent=`${q.getDate()} ${arMonths[q.getMonth()]} ${q.getFullYear()}`;
+  prev.style.display='block';
 }
 
 function updateHijriPreview(which){
@@ -7838,6 +7886,18 @@ function saveValidityInfo(){
     delete tx.validityStart;
     delete tx.validityEnd;
     delete tx.docType;
+  }
+  // حفظ بيانات القطعية لمعاملات التسجيل العيني (RER)
+  if(tx.issueCode==='RER'){
+    const regEnd=document.getElementById('vmRegEndDate')?.value;
+    if(regEnd){
+      tx.registrationEndDate=regEnd;
+      const q=computeQatiyyaDate(regEnd);
+      tx.qatiyyaDate=q?q.toISOString().split('T')[0]:null;
+    } else {
+      delete tx.registrationEndDate;
+      delete tx.qatiyyaDate;
+    }
   }
   ss('v4_tx',transactions);
   closeModal('mValidity');
@@ -10905,6 +10965,88 @@ function setAlertView(mode,btn){
   renderAlerts();
 }
 
+// ════════════════════════════════════════════════════════════
+// QATIYYA (اكتساب القطعية) — بطاقات التنبيه للتسجيل العيني
+// ════════════════════════════════════════════════════════════
+function buildQatiyyaAlerts(){
+  // كل معاملات RER المنجزة التي لها تاريخ قطعية محسوب
+  const baseTx=isLiaison()?filterTransactionsForLiaison(transactions):transactions;
+  const rerDone=baseTx.filter(t=>t.issueCode==='RER'&&t.qatiyyaDate&&!t.hidden&&isTxDone(t));
+  if(!rerDone.length) return '';
+  const today=new Date();today.setHours(0,0,0,0);
+  const arMonths=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const fmtAr=d=>`${d.getDate()} ${arMonths[d.getMonth()]} ${d.getFullYear()}`;
+  // قَصْر إشعار الاكتساب على المدير والمدراء التنفيذيين
+  const canSeeAchieved=currentUser&&(currentUser.role==='manager'||currentUser.role==='executive');
+
+  const achieved=[], pending=[];
+  rerDone.forEach(t=>{
+    const q=new Date(t.qatiyyaDate);q.setHours(0,0,0,0);
+    const daysToQ=Math.round((q-today)/86400000);
+    const projName=projects.find(p=>p.code===t.projCode)?.name||t.proj||t.projCode||'—';
+    if(daysToQ<=0) achieved.push({t,q,projName});
+    else pending.push({t,q,daysToQ,projName});
+  });
+  pending.sort((a,b)=>a.daysToQ-b.daysToQ);
+
+  let html='';
+
+  // ── إشعارات اكتساب القطعية (للمدراء فقط) ──
+  if(achieved.length&&canSeeAchieved){
+    html+=`<div style="margin-bottom:16px">`;
+    achieved.forEach(({t,q,projName})=>{
+      html+=`<div style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border:1px solid #6EE7B7;border-right:4px solid #059669;border-radius:12px;padding:16px;margin-bottom:10px;box-shadow:0 2px 8px rgba(5,150,105,.1)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#34D399,#059669);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 12px rgba(5,150,105,.3)">✓</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;color:#065F46">اكتسب الصك القطعية</div>
+            <div style="font-size:11px;color:#047857;margin-top:2px;font-family:'JetBrains Mono'">${t.code}</div>
+          </div>
+          <span style="background:#059669;color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:7px">✦ قطعية</span>
+        </div>
+        <div style="background:rgba(255,255,255,.7);border-radius:9px;padding:12px 14px;font-size:12.5px;color:#065F46;line-height:1.7">
+          نود إعلامكم بأن الصك الخاص بمشروع <b>${projName}</b> قد اكتسب القطعية اعتباراً من تاريخ <b>${fmtAr(q)}</b> (بعد مرور عام كامل على إتمام التسجيل دون اعتراض).
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px;justify-content:flex-end">
+          <button onclick="openTxDetail('${t.id}')" style="background:rgba(5,150,105,.12);color:#059669;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit">👁 استعراض المعاملة</button>
+        </div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  // ── بطاقات العدّ التنازلي (تظهر للجميع) ──
+  if(pending.length){
+    html+=`<div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;display:flex;align-items:center;gap:6px">⏳ صكوك تنتظر اكتساب القطعية (${pending.length})</div>`;
+    pending.forEach(({t,q,daysToQ,projName})=>{
+      // نسبة التقدّم: كم مضى من السنة (365 يوم)
+      const elapsed=365-daysToQ;
+      const pct=Math.max(0,Math.min(100,(elapsed/365)*100));
+      html+=`<div style="background:#fff;border:1px solid #E5E7EB;border-right:4px solid #6366F1;border-radius:12px;padding:14px 16px;margin-bottom:8px;box-shadow:0 2px 6px rgba(0,0,0,.04)">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;align-items:center;gap:11px">
+            <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#818CF8,#6366F1);display:flex;align-items:center;justify-content:center;font-size:17px">⏳</div>
+            <div>
+              <div style="font-size:12.5px;font-weight:700;color:#0F172A">${projName} — تسجيل عيني</div>
+              <div style="font-size:10px;color:#64748B;margin-top:2px;font-family:'JetBrains Mono'">${t.code}</div>
+            </div>
+          </div>
+          <div style="text-align:left">
+            <div style="font-size:9px;color:#94A3B8">يكتسب القطعية بعد</div>
+            <div style="font-size:17px;font-weight:800;color:#6366F1;font-family:'JetBrains Mono'">${daysToQ} يوم</div>
+            <div style="font-size:9px;color:#64748B">${fmtAr(q)}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;height:6px;background:#EEF0F4;border-radius:3px;overflow:hidden"><div style="width:${pct.toFixed(0)}%;height:6px;background:linear-gradient(135deg,#818CF8,#6366F1);border-radius:3px"></div></div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  return html;
+}
+
 function renderAlerts(){
   console.log('🔍 Rendering alerts with view:',alertViewMode);
 
@@ -10958,8 +11100,9 @@ function renderAlerts(){
     </div>
   `;
 
+  const qatiyyaHtml=buildQatiyyaAlerts();
   if(allTx.length===0){
-    document.getElementById('alertsList').innerHTML=`<div style="text-align:center;padding:60px 20px;color:var(--text3)">
+    document.getElementById('alertsList').innerHTML=qatiyyaHtml+`<div style="text-align:center;padding:60px 20px;color:var(--text3)">
       <div style="font-size:40px;margin-bottom:12px">📋</div>
       <div style="font-size:15px;font-weight:600;margin-bottom:6px">لا توجد معاملات بتاريخ بداية ونهاية</div>
       <div style="font-size:13px">المعاملات ذات الصلاحية ستظهر هنا</div>
@@ -10976,7 +11119,7 @@ function renderAlerts(){
   else if(alertViewMode==='table') html=renderAlertsTable(expired,urgent,soon,valid);
   else html=renderAlertsAccordion(expired,urgent,soon,valid);
 
-  document.getElementById('alertsList').innerHTML=html;
+  document.getElementById('alertsList').innerHTML=qatiyyaHtml+html;
 }
 
 // ── Helper: render single alert card buttons (shared) ──
@@ -11286,6 +11429,133 @@ function alertRemoveValidity(id){
   toast('تم حذف الصلاحية من التنبيهات','ok');
   renderAlerts();
   updateAlertsBadge();
+}
+
+// ════════════════════════════════════════════════════════════
+// ONE-CLICK EXECUTIVE REPORT (التقرير التنفيذي بنقرة)
+// ════════════════════════════════════════════════════════════
+function generateOneClickReport(){
+  // قراءة الفترة من منتقي صفحة التقارير
+  const period=document.getElementById('repPeriod')?.value||'all';
+  const now=new Date();
+  let from,to;
+  if(period==='month'){from=new Date(now.getFullYear(),now.getMonth(),1);to=new Date(now.getFullYear(),now.getMonth()+1,0);}
+  else if(period==='quarter'){const q=Math.floor(now.getMonth()/3);from=new Date(now.getFullYear(),q*3,1);to=new Date(now.getFullYear(),q*3+3,0);}
+  else if(period==='year'){from=new Date(now.getFullYear(),0,1);to=new Date(now.getFullYear(),11,31);}
+  else if(period==='all'){from=new Date(2000,0,1);to=new Date(now.getFullYear()+10,11,31);}
+  else{from=new Date(document.getElementById('repFrom')?.value||now);to=new Date(document.getElementById('repTo')?.value||now);}
+  from.setHours(0,0,0,0);to.setHours(23,59,59,999);
+  const fromMs=from.getTime(),toMs=to.getTime();
+
+  const arMonths=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const fmtAr=d=>`${d.getDate()} ${arMonths[d.getMonth()]} ${d.getFullYear()}`;
+  const fmtShort=ts=>{const d=new Date(ts);return `${d.getDate()}/${d.getMonth()+1}/${String(d.getFullYear()).slice(-2)}`;};
+
+  const baseTx=transactions.filter(t=>!t.hidden);
+
+  // 1) المهام المنجزة في الفترة (إنجاز مؤسسي — لا فردي)
+  const doneInPeriod=baseTx.filter(t=>{
+    if(!isTxDone(t)) return false;
+    const c=txCompletedAt(t);
+    return c&&c>=fromMs&&c<=toMs;
+  }).map(t=>({
+    code:t.code||'',
+    name:t.name||'—',
+    proj:projects.find(p=>p.code===t.projCode)?.name||t.proj||t.projCode||'—',
+    completedAt:txCompletedAt(t)
+  })).sort((a,b)=>b.completedAt-a.completedAt);
+
+  // 2) الصكوك التي اكتسبت القطعية في الفترة
+  const qatiyyaInPeriod=baseTx.filter(t=>{
+    if(t.issueCode!=='RER'||!t.qatiyyaDate) return false;
+    const q=new Date(t.qatiyyaDate).getTime();
+    return q>=fromMs&&q<=toMs;
+  }).map(t=>({
+    code:t.code||'',
+    proj:projects.find(p=>p.code===t.projCode)?.name||t.proj||t.projCode||'—',
+    qatiyyaDate:new Date(t.qatiyyaDate)
+  })).sort((a,b)=>a.qatiyyaDate-b.qatiyyaDate);
+
+  // 3) المشاريع النشطة (لها معاملة غير منجزة)
+  const activeProjs=new Set(baseTx.filter(t=>!isTxDone(t)).map(t=>projects.find(p=>p.code===t.projCode&&!p.parentCode)?.code||t.projCode)).size;
+
+  // بناء صفوف الجداول
+  const doneRows=doneInPeriod.length?doneInPeriod.map(r=>`
+    <tr><td style="font-family:'JetBrains Mono';color:#6366F1;font-size:10px;padding:7px 10px;border-bottom:1px solid #F1F5F9">${r.code}</td>
+    <td style="color:#0F172A;padding:7px 10px;border-bottom:1px solid #F1F5F9">${r.name}</td>
+    <td style="color:#64748B;padding:7px 10px;border-bottom:1px solid #F1F5F9">${r.proj}</td>
+    <td style="font-family:'JetBrains Mono';color:#64748B;padding:7px 10px;border-bottom:1px solid #F1F5F9">${fmtShort(r.completedAt)}</td></tr>
+  `).join(''):`<tr><td colspan="4" style="text-align:center;color:#94A3B8;padding:18px;font-style:italic">لا مهام منجزة في هذه الفترة</td></tr>`;
+
+  const qatiyyaRows=qatiyyaInPeriod.length?qatiyyaInPeriod.map(r=>`
+    <tr><td style="color:#0F172A;font-weight:600;padding:7px 10px;border-bottom:1px solid #F1F5F9">${r.proj}</td>
+    <td style="font-family:'JetBrains Mono';color:#059669;font-size:10px;padding:7px 10px;border-bottom:1px solid #F1F5F9">${r.code}</td>
+    <td style="font-family:'JetBrains Mono';color:#64748B;padding:7px 10px;border-bottom:1px solid #F1F5F9">${fmtAr(r.qatiyyaDate)}</td></tr>
+  `).join(''):`<tr><td colspan="3" style="text-align:center;color:#94A3B8;padding:18px;font-style:italic">لا صكوك اكتسبت القطعية في هذه الفترة</td></tr>`;
+
+  const genDate=new Date();
+  const periodLabel=period==='all'?'جميع الأوقات':`${fmtAr(from)} — ${fmtAr(to)}`;
+
+  // نافذة الطباعة
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>التقرير التنفيذي — سرايا</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=JetBrains+Mono&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'IBM Plex Sans Arabic',sans-serif;direction:rtl;background:#F1F5F9;padding:24px;color:#0F172A}
+    .report{max-width:840px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.12)}
+    .rhead{background:linear-gradient(135deg,#1E293B,#0F172A);padding:26px 30px;display:flex;align-items:center;justify-content:space-between}
+    .rhead h1{font-size:21px;color:#fff;font-weight:800}
+    .rhead .period{font-size:12px;color:#94A3B8;margin-top:4px}
+    .summary{padding:22px 30px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;border-bottom:1px solid #F1F5F9}
+    .sbox{text-align:center;border-radius:11px;padding:16px}
+    .sbox .num{font-size:30px;font-weight:800;font-family:'JetBrains Mono'}
+    .sbox .lbl{font-size:11px;font-weight:600;margin-top:3px}
+    .section{padding:18px 30px}
+    .section h2{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+    table{width:100%;border-collapse:collapse;font-size:11.5px}
+    thead th{padding:9px 10px;text-align:right;font-weight:700}
+    .rfoot{background:#F8FAFC;padding:14px 30px;border-top:1px solid #F1F5F9;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94A3B8}
+    .note{font-size:10px;color:#94A3B8;text-align:center;margin-top:8px;font-style:italic}
+    @media print{body{background:#fff;padding:0}.report{box-shadow:none;border-radius:0}.noprint{display:none!important}}
+    .printbtn{position:fixed;top:20px;left:20px;background:linear-gradient(135deg,#34D399,#059669);color:#fff;border:none;border-radius:9px;padding:11px 20px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(5,150,105,.3);z-index:100}
+  </style></head><body>
+  <button class="printbtn noprint" onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
+  <div class="report">
+    <div class="rhead">
+      <div><h1>التقرير التنفيذي</h1><div class="period">الفترة: ${periodLabel}</div></div>
+      <div style="text-align:left">
+        <svg width="46" height="46" viewBox="0 0 160 160"><circle cx="80" cy="80" r="76" fill="rgba(255,255,255,.1)"/><path d="M 112 52 L 112 58 Q 112 64 106 64 L 60 64 Q 52 64 52 72 L 52 78 Q 52 86 60 86 L 106 86 Q 112 86 112 92 L 112 98 Q 112 104 106 104 L 48 104" stroke="#fff" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="112" cy="52" r="7" fill="#6366F1"/><circle cx="48" cy="104" r="7" fill="#10B981"/></svg>
+        <div style="font-size:10px;color:#CBD5E1;margin-top:4px">الرقيب القابضة</div>
+      </div>
+    </div>
+    <div class="summary">
+      <div class="sbox" style="background:#ECFDF5"><div class="num" style="color:#059669">${doneInPeriod.length}</div><div class="lbl" style="color:#047857">معاملة منجزة</div></div>
+      <div class="sbox" style="background:#EEF2FF"><div class="num" style="color:#6366F1">${qatiyyaInPeriod.length}</div><div class="lbl" style="color:#4338CA">صك اكتسب القطعية</div></div>
+      <div class="sbox" style="background:#FEF3C7"><div class="num" style="color:#D97706">${activeProjs}</div><div class="lbl" style="color:#B45309">مشاريع نشطة</div></div>
+    </div>
+    <div class="section">
+      <h2>✅ المهام المنجزة في الفترة</h2>
+      <table>
+        <thead><tr style="background:#0F172A;color:#fff"><th style="border-radius:0 7px 7px 0">الكود</th><th>المعاملة</th><th>المشروع</th><th style="border-radius:7px 0 0 7px">تاريخ الإنجاز</th></tr></thead>
+        <tbody>${doneRows}</tbody>
+      </table>
+      <div class="note">إنجاز مؤسسي — بدون نسبته لشخص محدّد</div>
+    </div>
+    <div class="section">
+      <h2>⚖️ الصكوك التي اكتسبت القطعية</h2>
+      <table>
+        <thead><tr style="background:#059669;color:#fff"><th style="border-radius:0 7px 7px 0">المشروع</th><th>كود المعاملة</th><th style="border-radius:7px 0 0 7px">تاريخ اكتساب القطعية</th></tr></thead>
+        <tbody>${qatiyyaRows}</tbody>
+      </table>
+    </div>
+    <div class="rfoot">
+      <span>تم التوليد آلياً من نظام سرايا — الرقيب القابضة</span>
+      <span style="font-family:'JetBrains Mono'">${fmtAr(genDate)} · ${String(genDate.getHours()).padStart(2,'0')}:${String(genDate.getMinutes()).padStart(2,'0')}</span>
+    </div>
+  </div>
+  </body></html>`);
+  w.document.close();
 }
 
 function renderReport(){
