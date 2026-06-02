@@ -4692,6 +4692,26 @@ function allIssues(){return [...BASE_ISSUES,...(settings_.customIssues||[])]}
 // ── COMPLETION & TIMING HELPERS ──────────────────────────────
 
 // Helper functions to ensure consistent state across ALL flags
+// ════════════════════════════════════════════════════════════
+// UNIFIED ATTACHMENTS COLLECTOR (دالة موحّدة لجمع كل المرفقات)
+// تجمع: مرفقات المعاملة + مرفقات الخطوات (بكل صيغها)
+// ════════════════════════════════════════════════════════════
+function collectAllAttachments(t){
+  if(!t) return [];
+  const out=[];
+  // 1) مرفقات المعاملة المباشرة
+  (t.attachments||[]).forEach(a=>{
+    if(a&&(a.url||a.data)) out.push({...a,source:'tx'});
+  });
+  // 2) مرفقات الخطوات (كل الصيغ: attachment مفرد، attachments جمع، proofUrl)
+  (t.steps||[]).forEach((s,i)=>{
+    if(s.attachment&&(s.attachment.url||s.attachment.data)) out.push({...s.attachment,stepIdx:i+1,source:'step'});
+    if(Array.isArray(s.attachments)) s.attachments.forEach(a=>{if(a&&(a.url||a.data)) out.push({...a,stepIdx:i+1,source:'step'});});
+    if(s.proofUrl) out.push({name:s.proofName||'إثبات تنفيذ',url:s.proofUrl,stepIdx:i+1,isProof:true,source:'step'});
+  });
+  return out;
+}
+
 function markTxComplete(t){
   if(!t) return;
   t.status='منجزة';
@@ -7439,7 +7459,7 @@ function saveTx(){
 // ══════════════════════════════════════════════════════════════════
 // TX DETAIL
 // ══════════════════════════════════════════════════════════════════
-function openTxDetail(id){
+function openTxDetail(id,openTab){
   currentTxId=id;
   const t=transactions.find(x=>x.id===id);
   if(!t) return;
@@ -7546,16 +7566,17 @@ function openTxDetail(id){
     if(tabSubs) tabSubs.textContent=`المعاملات الفرعية${children.length?' ('+children.length+')':''}`;
   }
 
-  // Also show parent badge in details if this is a sub-tx
-  // Attachments
-  const atts=t.attachments||[];
+  // Attachments — استخدام الدالة الموحّدة (تشمل مرفقات الخطوات)
+  const atts=collectAllAttachments(t);
   document.getElementById('dp-atts').innerHTML=atts.length?atts.map((a,i)=>{
     const url=a.url||'';
     const isOldBase64=a.data&&!a.url;
+    const stepBadge=a.stepIdx?`<span style="font-size:9px;background:var(--ind-dim);color:var(--indigo);padding:2px 7px;border-radius:5px;font-weight:600;margin-right:4px">خطوة ${a.stepIdx}</span>`:'';
+    const proofBadge=a.isProof?`<span style="font-size:9px;background:#D1FAE5;color:#059669;padding:2px 7px;border-radius:5px;font-weight:600;margin-right:4px">إثبات</span>`:'';
     return `<div style="display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;background:var(--bg)">
       <span style="font-size:18px">${isOldBase64?'📎':'🔗'}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name||'مرفق'}</div>
+        <div style="font-weight:600;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${stepBadge}${proofBadge}${a.name||'مرفق'}</div>
         ${url?`<div style="font-size:10px;color:var(--text3);direction:ltr;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${url}</div>`:''}
         ${a.uploadedBy?`<div style="font-size:9px;color:var(--text3);margin-top:2px">📤 ${a.uploadedBy}${a.uploadedAt?' • '+new Date(a.uploadedAt).toLocaleDateString('en-GB'):''}</div>`:''}
         ${isOldBase64?'<div style="font-size:9px;color:var(--amber);margin-top:2px;font-weight:600">⚠️ مرفق قديم بنظام base64</div>':''}
@@ -7579,7 +7600,13 @@ function openTxDetail(id){
     ${canManage()?`<button class="btn bsm" onclick="hideTx('${t.id}')" style="background:rgba(148,163,184,.08);color:var(--text2);border:1px solid var(--border2)">${t.hidden?'👁 إظهار':'🙈 إخفاء'}</button><button class="btn bsm" onclick="deleteTx('${t.id}')" style="background:rgba(239,68,68,.08);color:var(--danger);border:1px solid rgba(239,68,68,.2)">🗑 حذف</button>`:''}
   `;
   openModal('mTxDetail');
-  switchDtab('dets',document.querySelector('.dtab'));
+  // افتح التبويب المطلوب (إن مُرّر) وإلا التفاصيل
+  const tabName=openTab||'dets';
+  const tabEls=document.querySelectorAll('#mTxDetail .dtab');
+  const tabOrder=['dets','govs','stps','subs','asgn','atts'];
+  const tabIdx=tabOrder.indexOf(tabName);
+  const targetTabEl=tabIdx>=0&&tabEls[tabIdx]?tabEls[tabIdx]:document.querySelector('#mTxDetail .dtab');
+  switchDtab(tabName,targetTabEl);
 }
 
 function renderGovRefsTab(t){
@@ -8733,11 +8760,13 @@ function buildTxTimelineHtml(txId){
   const dotColors={create:'#4F46E5',update:'#06B6D4',note:'#F59E0B',done:'#10B981',attach:'#8B5CF6',assign:'#EC4899'};
   const dotIcons={create:'⊕',update:'✎',note:'💬',done:'✓',attach:'📎',assign:'👤'};
 
-  // ─── INFO PILLS BAR ───
+  // ─── INFO PILLS BAR (قابلة للنقر للقفز للتبويب المعني) ───
+  const pillStyle=`background:#fff;border:1px solid #E5E7EB;border-radius:7px;padding:5px 11px;font-size:10.5px;color:#475569;display:inline-flex;align-items:center;gap:5px;cursor:pointer;transition:all .15s`;
+  const pillHover=`onmouseover="this.style.borderColor='var(--indigo)';this.style.boxShadow='0 2px 6px rgba(99,102,241,.15)'" onmouseout="this.style.borderColor='#E5E7EB';this.style.boxShadow='none'"`;
   const infoBar=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-    <span style="background:#fff;border:1px solid #E5E7EB;border-radius:7px;padding:5px 11px;font-size:10.5px;color:#475569;display:inline-flex;align-items:center;gap:5px">📊 <b style="color:#0F172A;font-family:'JetBrains Mono';font-size:11.5px">${events.length}</b> حدث</span>
-    ${totalAtts?`<span style="background:#fff;border:1px solid #E5E7EB;border-radius:7px;padding:5px 11px;font-size:10.5px;color:#475569;display:inline-flex;align-items:center;gap:5px">📎 <b style="color:#0F172A;font-family:'JetBrains Mono';font-size:11.5px">${totalAtts}</b> مرفق</span>`:''}
-    ${durationStr?`<span style="background:#fff;border:1px solid #E5E7EB;border-radius:7px;padding:5px 11px;font-size:10.5px;color:#475569;display:inline-flex;align-items:center;gap:5px">⏱ <b style="color:#0F172A;font-family:'JetBrains Mono';font-size:11.5px">${durationStr}</b></span>`:''}
+    <span onclick="openTxDetail('${txId}','stps')" ${pillHover} style="${pillStyle}" title="عرض مسار المعاملة">📊 <b style="color:#0F172A;font-family:'JetBrains Mono';font-size:11.5px">${events.length}</b> حدث</span>
+    ${totalAtts?`<span onclick="openTxDetail('${txId}','atts')" ${pillHover} style="${pillStyle}" title="عرض المرفقات">📎 <b style="color:#0F172A;font-family:'JetBrains Mono';font-size:11.5px">${totalAtts}</b> مرفق</span>`:''}
+    ${durationStr?`<span onclick="openTxDetail('${txId}','dets')" ${pillHover} style="${pillStyle}" title="عرض التفاصيل">⏱ <b style="color:#0F172A;font-family:'JetBrains Mono';font-size:11.5px">${durationStr}</b></span>`:''}
   </div>`;
 
   // ─── ACTION BUTTONS ───
@@ -12178,7 +12207,7 @@ function exportAllXLSX(){
     const childCount=transactions.filter(x=>x.parentId===t.id).length;
     const stepCount=(t.steps||[]).length;
     const stepNotes=(t.steps||[]).filter(s=>s.note&&s.note.trim()).length;
-    const attCount=(t.attachments||[]).length+(t.steps||[]).filter(s=>s.attachment).length;
+    const attCount=collectAllAttachments(t).length;
     const lastStep=stepCount?t.steps[stepCount-1]:null;
     const govRefsStr=(t.govRefs||[]).map(r=>{
       const parts=[r.num];
@@ -12363,7 +12392,7 @@ function exportAllXLSX(){
   const totalLate=visibleTx.filter(t=>t.status==='متأخرة').length;
   const totalProg=visibleTx.filter(t=>t.status==='تحت الإجراء').length;
   const totalSteps=visibleTx.reduce((s,t)=>s+(t.steps||[]).length,0);
-  const totalAtts=visibleTx.reduce((s,t)=>s+(t.attachments||[]).length+(t.steps||[]).filter(x=>x.attachment).length,0);
+  const totalAtts=visibleTx.reduce((s,t)=>s+collectAllAttachments(t).length,0);
   const totalGov=visibleTx.reduce((s,t)=>s+(t.govRefs||[]).length,0);
   const overviewRows=[
     ['تقرير شامل لنظام إدارة المعاملات — الرقيب القابضة'],
