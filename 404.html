@@ -2378,6 +2378,33 @@ body::after{
   </div>
 </div>
 
+<!-- QATIYYA EDITOR MODAL (محرر بيانات القطعية المستقل) -->
+<div class="mb" id="mQatiyyaEditor">
+  <div class="modal" style="max-width:440px">
+    <div class="mhdr">
+      <div><h2>⚖️ بيانات اكتساب القطعية</h2><p style="font-size:11px;color:var(--text2)">للتسجيل العيني — يُحسب تاريخ القطعية تلقائياً</p></div>
+      <button class="mclose" onclick="closeModal('mQatiyyaEditor')">✕</button>
+    </div>
+    <div class="mbody">
+      <div style="background:linear-gradient(135deg,#ECFDF5,#F0FDF4);border:1px solid #6EE7B7;border-radius:12px;padding:16px">
+        <div style="font-size:11px;color:#047857;margin-bottom:12px;line-height:1.6">أدخل تاريخ انتهاء التسجيل الفعلي. سيكتسب الصك القطعية بعد عام ميلادي كامل من هذا التاريخ.</div>
+        <div class="fg">
+          <label class="flbl" style="color:#065F46">تاريخ انتهاء التسجيل الفعلي *</label>
+          <input type="date" class="finp" id="qeRegEndDate" onchange="updateQeQatiyyaPreview()" style="border-color:#6EE7B7">
+        </div>
+        <div id="qeQatiyyaPreview" style="display:none;margin-top:12px;padding:12px 14px;background:#fff;border-radius:9px;border:1px solid #A7F3D0">
+          <div style="font-size:10px;color:#64748B;margin-bottom:3px">تاريخ اكتساب القطعية المتوقّع</div>
+          <div id="qeQatiyyaDate" style="font-size:16px;font-weight:800;color:#059669;font-family:'JetBrains Mono'">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="mfooter">
+      <button class="btn bs" onclick="clearQatiyya()" style="color:var(--danger)">🗑 مسح البيانات</button>
+      <button class="btn bp" onclick="saveQatiyyaEditor()">حفظ ✓</button>
+    </div>
+  </div>
+</div>
+
 <!-- ALERT EDIT VALIDITY MODAL -->
 <div class="mb" id="mAlertEditValidity">
   <div class="modal" style="max-width:460px">
@@ -7544,7 +7571,19 @@ function openTxDetail(id,openTab){
         }
         return `<button class="btn bs bsm" onclick="chStatus('${t.id}','${s}')">${s}</button>`;
       }).join('')}
-    </div>`;
+    </div>
+    ${t.issueCode==='RER'?`<div style="margin-top:12px;padding:14px;background:linear-gradient(135deg,#ECFDF5,#F0FDF4);border:1px solid #6EE7B7;border-radius:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:18px">⚖️</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#065F46">اكتساب القطعية</div>
+            ${t.qatiyyaDate?`<div style="font-size:11px;color:#047857;margin-top:2px">القطعية في: <b style="font-family:'JetBrains Mono'">${(()=>{const q=new Date(t.qatiyyaDate);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return q.getDate()+' '+m[q.getMonth()]+' '+q.getFullYear();})()}</b></div>`:`<div style="font-size:11px;color:#94A3B8;margin-top:2px">لم تُحدّد بعد</div>`}
+          </div>
+        </div>
+        <button class="btn bsm" onclick="openQatiyyaEditor('${t.id}')" style="background:#059669;color:#fff;border:none;font-weight:600">${t.qatiyyaDate?'✏️ تعديل':'+ إضافة تاريخ التسجيل'}</button>
+      </div>
+    </div>`:''}`;
 
   // Gov refs tab
   renderGovRefsTab(t);
@@ -7864,6 +7903,56 @@ function updateCvQatiyyaPreview(){
   const arMonths=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   dateEl.textContent=`${q.getDate()} ${arMonths[q.getMonth()]} ${q.getFullYear()}`;
   prev.style.display='block';
+}
+
+// ── محرر القطعية المستقل (يعمل بأي حالة، لمعاملات RER) ──
+let qatiyyaEditorTxId=null;
+function openQatiyyaEditor(txId){
+  const t=transactions.find(x=>x.id===txId);
+  if(!t) return;
+  qatiyyaEditorTxId=txId;
+  const regEl=document.getElementById('qeRegEndDate');
+  if(regEl) regEl.value=t.registrationEndDate||'';
+  updateQeQatiyyaPreview();
+  openModal('mQatiyyaEditor');
+}
+function updateQeQatiyyaPreview(){
+  const v=document.getElementById('qeRegEndDate')?.value;
+  const prev=document.getElementById('qeQatiyyaPreview');
+  const dateEl=document.getElementById('qeQatiyyaDate');
+  if(!prev||!dateEl) return;
+  const q=computeQatiyyaDate(v);
+  if(!q){prev.style.display='none';return;}
+  const arMonths=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  dateEl.textContent=`${q.getDate()} ${arMonths[q.getMonth()]} ${q.getFullYear()}`;
+  prev.style.display='block';
+}
+function saveQatiyyaEditor(){
+  if(!qatiyyaEditorTxId) return;
+  const t=transactions.find(x=>x.id===qatiyyaEditorTxId);
+  if(!t) return;
+  const regEnd=document.getElementById('qeRegEndDate')?.value;
+  if(!regEnd){toast('يرجى إدخال تاريخ انتهاء التسجيل','er');return;}
+  t.registrationEndDate=regEnd;
+  const q=computeQatiyyaDate(regEnd);
+  t.qatiyyaDate=q?q.toISOString().split('T')[0]:null;
+  ss('v4_tx',transactions);
+  closeModal('mQatiyyaEditor');
+  toast('✅ تم حفظ بيانات القطعية','ok');
+  openTxDetail(qatiyyaEditorTxId,'dets');
+  renderAlerts&&renderAlerts();
+}
+function clearQatiyya(){
+  if(!qatiyyaEditorTxId) return;
+  const t=transactions.find(x=>x.id===qatiyyaEditorTxId);
+  if(!t) return;
+  delete t.registrationEndDate;
+  delete t.qatiyyaDate;
+  ss('v4_tx',transactions);
+  closeModal('mQatiyyaEditor');
+  toast('🗑 تم مسح بيانات القطعية','ok');
+  openTxDetail(qatiyyaEditorTxId,'dets');
+  renderAlerts&&renderAlerts();
 }
 
 function updateHijriPreview(which){
