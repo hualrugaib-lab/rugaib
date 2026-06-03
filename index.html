@@ -2354,6 +2354,22 @@ body::after{
         </div>
         <div class="fg"><label class="flbl">ملاحظات (اختياري)</label><input class="finp" id="validityNote" placeholder="مثال: رخصة بناء صادرة من أمانة الرياض"></div>
       </div>
+      <!-- قسم اكتساب القطعية — يظهر فقط لمعاملات التسجيل العيني (RER) -->
+      <div id="cvQatiyyaSection" style="display:none;margin-top:14px;padding:16px;background:linear-gradient(135deg,#ECFDF5,#F0FDF4);border:1px solid #6EE7B7;border-radius:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:18px">⚖️</span>
+          <span style="font-size:13px;font-weight:700;color:#065F46">اكتساب القطعية (للتسجيل العيني)</span>
+        </div>
+        <div style="font-size:11px;color:#047857;margin-bottom:12px;line-height:1.6">أدخل تاريخ انتهاء التسجيل الفعلي. سيحسب النظام تاريخ اكتساب القطعية تلقائياً (بعد عام ميلادي كامل).</div>
+        <div class="fg">
+          <label class="flbl" style="color:#065F46">تاريخ انتهاء التسجيل الفعلي</label>
+          <input type="date" class="finp" id="cvRegEndDate" onchange="updateCvQatiyyaPreview()" style="border-color:#6EE7B7">
+        </div>
+        <div id="cvQatiyyaPreview" style="display:none;margin-top:10px;padding:10px 14px;background:#fff;border-radius:9px;border:1px solid #A7F3D0">
+          <div style="font-size:10px;color:#64748B;margin-bottom:3px">تاريخ اكتساب القطعية المتوقّع</div>
+          <div id="cvQatiyyaDate" style="font-size:15px;font-weight:800;color:#059669;font-family:'JetBrains Mono'">—</div>
+        </div>
+      </div>
     </div>
     <div class="mfooter">
       <button class="btn bs" onclick="closeModal('mCompletionValidity');finalizeCompletion()">تخطي</button>
@@ -7519,7 +7535,15 @@ function openTxDetail(id,openTab){
     </div>
     ${t.purpose?`<div style="background:var(--lgray);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;margin-bottom:14px">${t.purpose}</div>`:''}
     <div style="display:flex;gap:6px;flex-wrap:wrap">
-      ${['تحت الإجراء','منجزة','متأخرة','موقوفة'].map(s=>`<button class="btn bs bsm" onclick="chStatus('${t.id}','${s}')">${s}</button>`).join('')}
+      ${['تحت الإجراء','منجزة','متأخرة','موقوفة'].map(s=>{
+        const isCurrent=(t.status||'تحت الإجراء')===s;
+        const colors={'تحت الإجراء':'#6366F1','منجزة':'#059669','متأخرة':'#F59E0B','موقوفة':'#64748B'};
+        const c=colors[s];
+        if(isCurrent){
+          return `<button class="btn bsm" disabled style="background:${c};color:#fff;border:none;cursor:default;opacity:1;font-weight:700">✓ ${s}</button>`;
+        }
+        return `<button class="btn bs bsm" onclick="chStatus('${t.id}','${s}')">${s}</button>`;
+      }).join('')}
     </div>`;
 
   // Gov refs tab
@@ -7822,6 +7846,18 @@ function updateQatiyyaPreview(){
   const v=document.getElementById('vmRegEndDate')?.value;
   const prev=document.getElementById('vmQatiyyaPreview');
   const dateEl=document.getElementById('vmQatiyyaDate');
+  if(!prev||!dateEl) return;
+  const q=computeQatiyyaDate(v);
+  if(!q){prev.style.display='none';return;}
+  const arMonths=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  dateEl.textContent=`${q.getDate()} ${arMonths[q.getMonth()]} ${q.getFullYear()}`;
+  prev.style.display='block';
+}
+// نسخة نافذة الإنجاز من التفاصيل (mCompletionValidity)
+function updateCvQatiyyaPreview(){
+  const v=document.getElementById('cvRegEndDate')?.value;
+  const prev=document.getElementById('cvQatiyyaPreview');
+  const dateEl=document.getElementById('cvQatiyyaDate');
   if(!prev||!dateEl) return;
   const q=computeQatiyyaDate(v);
   if(!q){prev.style.display='none';return;}
@@ -8833,7 +8869,7 @@ function buildTxTimelineHtml(txId){
   const actionBar=`<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
     <button onclick="event.stopPropagation();openTxDetail('${t.id}')" style="padding:6px 13px;border-radius:7px;border:none;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;background:linear-gradient(135deg,#4F46E5,#7C3AED);color:#fff">👁 تفاصيل كاملة</button>
     ${canUpdate&&!isTxDone(t)?`<button onclick="event.stopPropagation();openAddStep('${t.id}')" style="padding:6px 13px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;background:#fff;color:#475569;border:1px solid #CBD5E1">⊕ تحديث</button>`:''}
-    ${canEdit&&!isTxDone(t)?`<button onclick="event.stopPropagation();openCompleteTx('${t.id}')" style="padding:6px 13px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;background:#fff;color:#475569;border:1px solid #CBD5E1">✓ إنجاز</button>`:''}
+    ${canEdit&&!isTxDone(t)?`<button onclick="event.stopPropagation();chStatus('${t.id}','منجزة')" style="padding:6px 13px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;background:#fff;color:#475569;border:1px solid #CBD5E1">✓ إنجاز</button>`:''}
   </div>`;
 
   // ─── TOP-LEVEL ATTACHMENTS BOX ───
@@ -9167,6 +9203,11 @@ function chStatus(id,st){
   if(!requireEdit('تغيير الحالة')) return;
   const t=transactions.find(x=>x.id===id);
   if(!t) return;
+  // حماية: إذا كانت الحالة الحالية هي نفسها المطلوبة، لا تفعل شيئاً
+  if((t.status||'تحت الإجراء')===st){
+    toast(`المعاملة بالفعل في حالة "${st}"`,'er');
+    return;
+  }
   if(st==='منجزة'){
     // Ask about validity before finalizing
     pendingCompletionId = id;
@@ -9179,6 +9220,15 @@ function chStatus(id,st){
     const btnN=document.getElementById('btnNoValidity');
     if(btnY){btnY.style.border='2px solid var(--indigo)';btnY.style.background='var(--ind-dim)';btnY.style.color='var(--indigo)';}
     if(btnN){btnN.style.border='2px solid var(--border2)';btnN.style.background='transparent';btnN.style.color='var(--text2)';}
+    // إظهار قسم القطعية فقط لمعاملات التسجيل العيني (RER)
+    const cvQ=document.getElementById('cvQatiyyaSection');
+    if(cvQ){
+      const isRER=t.issueCode==='RER';
+      cvQ.style.display=isRER?'block':'none';
+      const regEl=document.getElementById('cvRegEndDate');
+      if(regEl) regEl.value=t.registrationEndDate||'';
+      if(isRER) updateCvQatiyyaPreview();
+    }
     closeModal('mTxDetail');
     openModal('mCompletionValidity');
     return;
@@ -9260,6 +9310,16 @@ function saveValidityAndComplete(){
       t.dateStart=startG||t.dateStart;
     }
   }
+  // حفظ بيانات القطعية لمعاملات التسجيل العيني (RER)
+  const cvTx=transactions.find(x=>x.id===pendingCompletionId);
+  if(cvTx&&cvTx.issueCode==='RER'){
+    const regEnd=document.getElementById('cvRegEndDate')?.value;
+    if(regEnd){
+      cvTx.registrationEndDate=regEnd;
+      const q=computeQatiyyaDate(regEnd);
+      cvTx.qatiyyaDate=q?q.toISOString().split('T')[0]:null;
+    }
+  }
   closeModal('mCompletionValidity');
   finalizeCompletion();
 }
@@ -9268,6 +9328,15 @@ function finalizeCompletion(){
   if(!pendingCompletionId) return;
   const t=transactions.find(x=>x.id===pendingCompletionId);
   if(t) t.isRenewing=false; // Clear renewing flag on completion
+  // ضمان حفظ القطعية لـ RER حتى لو ضُغط "تخطي" بعد إدخال التاريخ
+  if(t&&t.issueCode==='RER'&&!t.qatiyyaDate){
+    const regEnd=document.getElementById('cvRegEndDate')?.value;
+    if(regEnd){
+      t.registrationEndDate=regEnd;
+      const q=computeQatiyyaDate(regEnd);
+      t.qatiyyaDate=q?q.toISOString().split('T')[0]:null;
+    }
+  }
   applyStatusChange(pendingCompletionId,'منجزة');
   pendingCompletionId=null;
   updateAlertsBadge();
