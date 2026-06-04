@@ -478,8 +478,8 @@ body::after{
 .tx-item{animation:cardIn .28s cubic-bezier(.34,1.2,.64,1) both}
 .p-wrap{padding:24px 28px}
 /* Neumorphism surface backgrounds for the three themed pages */
-#pg-dash .p-wrap,#pg-transactions .p-wrap,#pg-alerts .p-wrap{background:#EEF0F4}
-#pg-dash,#pg-transactions,#pg-alerts{background:#EEF0F4}
+#pg-dash .p-wrap,#pg-transactions .p-wrap,#pg-alerts .p-wrap,#pg-realestate .p-wrap{background:#EEF0F4}
+#pg-dash,#pg-transactions,#pg-alerts,#pg-realestate{background:#EEF0F4}
 /* Neumorphism inputs/selects on themed pages (carved-in look) */
 #pg-transactions .sinp,#pg-transactions .fsel,#pg-alerts .sinp,#pg-alerts .fsel{background:#EEF0F4;border:none;box-shadow:inset 3px 3px 6px #d2d6dd,inset -3px -3px 6px #ffffff;color:#0F172A}
 #pg-transactions .sinp:focus,#pg-transactions .fsel:focus,#pg-alerts .sinp:focus,#pg-alerts .fsel:focus{box-shadow:inset 4px 4px 8px #cdd1d9,inset -4px -4px 8px #ffffff}
@@ -2291,6 +2291,12 @@ body::after{
       <div class="fg" id="pendingReasonWrap" style="display:none">
         <label class="flbl">🏢 الجهة المنتظر منها الرد</label>
         <input type="text" class="finp" id="pendingReason" placeholder="مثال: أمانة منطقة الرياض، البلدية، الدفاع المدني...">
+      </div>
+
+      <div class="fg">
+        <label class="flbl">🏛️ رقم حكومي / رقم معاملة (اختياري)</label>
+        <input type="text" class="finp" id="stepGovNum" placeholder="مثال: 4400123456 — سيُضاف للأرقام الحكومية" style="font-family:'JetBrains Mono'">
+        <div style="font-size:10px;color:var(--sub);margin-top:4px">💡 إن أدخلت رقماً، سيظهر تلقائياً في تبويب الأرقام الحكومية ومع هذه الملاحظة في المسار</div>
       </div>
 
       <div class="fg">
@@ -8933,7 +8939,7 @@ function buildTxTimelineHtml(txId){
     if(s.type==='note'){type='note';label='💬 ملاحظة';}
     else if(s.status==='منجزة'){type='done';label='✅ تم الإنجاز';}
     else if(s.status){type='update';label=`✎ تحديث (${s.status})`;}
-    events.push({type,label,text:s.text||s.note||'',by:s.by||'مستخدم',timestamp:s.date?new Date(s.date).getTime():(s.timestamp||Date.now()),status:s.status,attachments:s.attachments||[]});
+    events.push({type,label,text:s.text||s.note||'',by:s.by||'مستخدم',timestamp:s.date?new Date(s.date).getTime():(s.timestamp||Date.now()),status:s.status,attachments:s.attachments||[],govNum:s.govNum||''});
   });
   if(t.assignedAt&&t.assignee){
     const u=users.find(u=>u.email===t.assignee);
@@ -9067,6 +9073,7 @@ function buildTxTimelineHtml(txId){
 
         <div style="font-size:11.5px;font-weight:700;color:${color};margin-bottom:5px;display:flex;align-items:center;gap:5px">${ev.label}</div>
         ${ev.text?`<div style="color:#475569;font-size:11px;line-height:1.65">${ev.text}</div>`:''}
+        ${ev.govNum?`<div style="margin-top:6px;display:inline-flex;align-items:center;gap:5px;background:var(--ind-dim);color:var(--indigo);padding:3px 9px;border-radius:6px;font-size:10px;font-weight:600">🏛️ رقم حكومي: <span style="font-family:'JetBrains Mono'">${ev.govNum}</span></div>`:''}
         ${attHtml}
         <div style="font-size:10px;color:#94A3B8;margin-top:8px;padding-top:7px;border-top:1px dashed #F1F5F9;display:flex;align-items:center;gap:5px">👤 ${ev.by||'—'}</div>
       </div>
@@ -9566,6 +9573,8 @@ function saveGovRefs(){
 let stepForId=null;
 function openAddStep(id){
   stepForId=id;
+  const t=transactions.find(x=>x.id===id);
+  if(!t) return;
   const noteEl=document.getElementById('stepNote');if(noteEl)noteEl.value='';
   const stEl=document.getElementById('stepSt');if(stEl){
     stEl.value='';
@@ -9581,6 +9590,7 @@ function openAddStep(id){
   // Clear new link attachment fields
   const sName=document.getElementById('stepAttName');if(sName)sName.value='';
   const sUrl=document.getElementById('stepAttUrl');if(sUrl)sUrl.value='';
+  const sGov=document.getElementById('stepGovNum');if(sGov)sGov.value='';
   setTimeout(()=>{
     const el=document.getElementById('stepNote');
     if(el) attachVoiceButton(el);
@@ -9623,6 +9633,22 @@ function saveStep(){
       uploadedBy:currentUser.name,
       uploadedAt:Date.now()
     };
+  }
+  // Capture government number — add to govRefs AND link to this step
+  const stepGovNum=document.getElementById('stepGovNum')?.value.trim()||'';
+  if(stepGovNum){
+    if(!t.govRefs) t.govRefs=[];
+    // تجنّب التكرار
+    if(!t.govRefs.some(g=>g.num===stepGovNum)){
+      t.govRefs.push({
+        num:stepGovNum,
+        date:new Date().toISOString().split('T')[0],
+        note:note,
+        addedVia:'step',
+        addedBy:currentUser.name
+      });
+    }
+    step.govNum=stepGovNum; // ربط الرقم بالخطوة لعرضه في المسار
   }
   t.steps.push(step);
   if(nst) t.status=nst;
@@ -11173,7 +11199,7 @@ function renderRealEstate(){
   const colsEl=document.getElementById('reColumns');
   if(!summaryEl||!colsEl) return;
 
-  // تجميع صكوك RER التي لها تاريخ قطعية
+  // تجميع صكوك RER التي لها تاريخ قطعية (تم تسجيلها فعلاً)
   const baseTx=isLiaison()?filterTransactionsForLiaison(transactions):transactions;
   let rerTx=baseTx.filter(t=>t.issueCode==='RER'&&t.qatiyyaDate&&!t.hidden);
 
@@ -11190,7 +11216,7 @@ function renderRealEstate(){
   }
 
   const today=new Date();today.setHours(0,0,0,0);
-  const achieved=[],imminent=[],pending=[];
+  const achieved=[],imminent=[],registered=[];
   rerTx.forEach(t=>{
     const Qd=new Date(t.qatiyyaDate);Qd.setHours(0,0,0,0);
     const daysToQ=Math.round((Qd-today)/86400000);
@@ -11198,21 +11224,21 @@ function renderRealEstate(){
     const item={t,Qd,daysToQ,projName};
     if(daysToQ<=0) achieved.push(item);
     else if(daysToQ<=30) imminent.push(item);
-    else pending.push(item);
+    else registered.push(item);
   });
-  pending.sort((a,b)=>a.daysToQ-b.daysToQ);
+  registered.sort((a,b)=>a.daysToQ-b.daysToQ);
   imminent.sort((a,b)=>a.daysToQ-b.daysToQ);
   achieved.sort((a,b)=>b.Qd-a.Qd);
 
-  // بطاقات الملخص
+  // بطاقات الملخص — كلها إيجابية
   const sumBox=(icon,num,label,color)=>`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:18px;text-align:center">
     <div style="width:50px;height:50px;border-radius:50%;background:#EEF0F4;box-shadow:inset 4px 4px 8px #c8cdd4,inset -4px -4px 8px #ffffff;display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 10px">${icon}</div>
     <div style="font-size:28px;font-weight:800;color:${color};font-family:'JetBrains Mono'">${num}</div>
     <div style="font-size:12px;color:#7a8089;font-weight:600;margin-top:3px">${label}</div>
   </div>`;
-  summaryEl.innerHTML=sumBox('🏆',achieved.length,'اكتسب القطعية','#1d9e75')+
-    sumBox('⏰',imminent.length,'وشيك (أقل من 30 يوم)','#ef9f27')+
-    sumBox('📋',pending.length,'قيد الانتظار','#534ab7');
+  summaryEl.innerHTML=sumBox('📋',registered.length,'تم التسجيل','#534ab7')+
+    sumBox('⏰',imminent.length,'قطعية وشيكة','#ef9f27')+
+    sumBox('🏆',achieved.length,'اكتسب القطعية','#1d9e75');
 
   // دالة بناء دائرة التقدّم SVG
   const ring=(daysToQ,color,track)=>{
@@ -11226,59 +11252,61 @@ function renderRealEstate(){
       <text x="28" y="37" text-anchor="middle" font-size="7" fill="#7a8089">يوم</text>
     </svg>`;
   };
-  // بطاقة صك (لقيد الانتظار والوشيك)
+  // بطاقة صك مسجّل (تم تسجيله وينتظر القطعية)
   const deedCard=(item,color,track,accent)=>{
     const {t,Qd,daysToQ,projName}=item;
     const propHtml=t.propertyNumber?`<div style="padding:3px 7px;border-radius:6px;margin-top:5px;display:inline-block;background:#EEF0F4;box-shadow:inset 2px 2px 4px #c8cdd4,inset -2px -2px 4px #ffffff"><span style="font-size:8px;color:#7a8089">🏠</span> <b style="font-family:'JetBrains Mono';font-size:9px;color:#534ab7">${t.propertyNumber}</b></div>`:'';
     return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;background:#EEF0F4;border-radius:12px;box-shadow:5px 5px 10px #c8cdd4,-5px -5px 10px #ffffff;padding:13px;display:flex;align-items:center;gap:13px;${accent?`border:2px solid ${accent}`:''}">
       ${ring(daysToQ,color,track)}
       <div style="flex:1;min-width:0">
-        <div style="font-size:11px;font-weight:700;color:#3a3f47">${projName}</div>
-        <div style="font-size:8px;color:#9aa0a8;font-family:'JetBrains Mono';margin-top:2px">${t.code}</div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;font-weight:700;color:#3a3f47">${projName}</span><span style="font-size:8px;color:#1d9e75;background:#EEF0F4;box-shadow:inset 1px 1px 2px #c8cdd4,inset -1px -1px 2px #ffffff;padding:1px 6px;border-radius:5px">✓ مُسجّل</span></div>
+        <div style="font-size:8px;color:#9aa0a8;font-family:'JetBrains Mono';margin-top:3px">${t.code}</div>
         ${propHtml}
         <div style="font-size:8px;color:${color};font-family:'JetBrains Mono';margin-top:5px">القطعية: ${reFmtAr(Qd)}</div>
       </div>
     </div>`;
   };
 
-  // ─── عمود: قيد الانتظار ───
-  const pendingShow=pending.slice(0,6);
-  const pendingMore=pending.length-pendingShow.length;
-  const pendingCol=`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:17px">
+  // ─── عمود: تم التسجيل (ينتظر القطعية) ───
+  const regShow=registered.slice(0,8);
+  const regMore=registered.length-regShow.length;
+  const registeredCol=`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:17px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:15px">
       <span style="width:10px;height:10px;border-radius:50%;background:#534ab7;box-shadow:0 0 6px rgba(83,74,183,.5)"></span>
-      <span style="font-size:13px;font-weight:700;color:#3c3489">قيد الانتظار (${pending.length})</span>
+      <span style="font-size:13px;font-weight:700;color:#3c3489">تم التسجيل (${registered.length})</span>
     </div>
+    <div style="font-size:10px;color:#7a8089;margin-bottom:12px;line-height:1.5">صكوك سُجّلت بنجاح وتسير نحو اكتساب القطعية</div>
     <div style="display:flex;flex-direction:column;gap:11px">
-      ${pendingShow.length?pendingShow.map(it=>deedCard(it,'#1d9e75','#e2e6ec',null)).join(''):'<div style="text-align:center;padding:20px;font-size:11px;color:#9aa0a8">لا صكوك</div>'}
-      ${pendingMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#534ab7;font-weight:600">+ ${pendingMore} صك آخر</div>`:''}
+      ${regShow.length?regShow.map(it=>deedCard(it,'#1d9e75','#e2e6ec',null)).join(''):'<div style="text-align:center;padding:20px;font-size:11px;color:#9aa0a8">لا صكوك مسجّلة بعد</div>'}
+      ${regMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#534ab7;font-weight:600">+ ${regMore} صك آخر</div>`:''}
     </div>
   </div>`;
 
-  // ─── عمود: وشيك ───
-  const imminentShow=imminent.slice(0,6);
-  const imminentMore=imminent.length-imminentShow.length;
+  // ─── عمود: قطعية وشيكة ───
+  const immShow=imminent.slice(0,8);
+  const immMore=imminent.length-immShow.length;
   const imminentCol=`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:17px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:15px">
       <span style="width:10px;height:10px;border-radius:50%;background:#ef9f27;box-shadow:0 0 6px rgba(239,159,39,.5)"></span>
-      <span style="font-size:13px;font-weight:700;color:#854f0b">وشيك (${imminent.length})</span>
+      <span style="font-size:13px;font-weight:700;color:#854f0b">قطعية وشيكة (${imminent.length})</span>
     </div>
+    <div style="font-size:10px;color:#7a8089;margin-bottom:12px;line-height:1.5">على وشك اكتساب القطعية خلال 30 يوماً</div>
     <div style="display:flex;flex-direction:column;gap:11px">
-      ${imminentShow.length?imminentShow.map(it=>deedCard(it,'#ef9f27','#FEF3C7','#ef9f27')).join(''):'<div style="text-align:center;padding:20px;font-size:11px;color:#9aa0a8">لا صكوك وشيكة</div>'}
-      ${imminentMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#ba7517;font-weight:600">+ ${imminentMore} صك</div>`:''}
+      ${immShow.length?immShow.map(it=>deedCard(it,'#ef9f27','#FEF3C7','#ef9f27')).join(''):'<div style="text-align:center;padding:20px;font-size:11px;color:#9aa0a8">لا صكوك وشيكة حالياً</div>'}
+      ${immMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#ba7517;font-weight:600">+ ${immMore} صك</div>`:''}
     </div>
   </div>`;
 
-  // ─── عمود: اكتسب القطعية ───
-  const achievedShow=achieved.slice(0,4);
-  const achievedMore=achieved.length-achievedShow.length;
+  // ─── عمود: اكتسب القطعية (التتويج النهائي) ───
+  const achShow=achieved.slice(0,5);
+  const achMore=achieved.length-achShow.length;
   const achievedRow=(item)=>{
     const {t,Qd,projName}=item;
     return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;background:#EEF0F4;border-radius:12px;box-shadow:5px 5px 10px #c8cdd4,-5px -5px 10px #ffffff;padding:10px 12px;display:flex;align-items:center;gap:9px">
-      <span style="width:22px;height:22px;border-radius:50%;background:#1d9e75;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">✓</span>
+      <span style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#34D399,#1d9e75);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">🏆</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:10px;font-weight:700;color:#3a3f47;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${projName}</div>
-        ${t.propertyNumber?`<div style="font-size:8px;color:#9aa0a8;font-family:'JetBrains Mono'">${t.propertyNumber}</div>`:''}
+        ${t.propertyNumber?`<div style="font-size:8px;color:#9aa0a8;font-family:'JetBrains Mono'">🏠 ${t.propertyNumber}</div>`:`<div style="font-size:8px;color:#9aa0a8;font-family:'JetBrains Mono'">${t.code}</div>`}
       </div>
       <span style="font-size:9px;color:#1d9e75;font-family:'JetBrains Mono';font-weight:700">${Qd.getFullYear()}</span>
     </div>`;
@@ -11290,16 +11318,16 @@ function renderRealEstate(){
     </div>
     ${achieved.length?`<div style="background:#EEF0F4;border-radius:14px;box-shadow:inset 4px 4px 8px #c8cdd4,inset -4px -4px 8px #ffffff;padding:16px;text-align:center;margin-bottom:11px">
       <div style="font-size:30px">🏆</div>
-      <div style="font-size:14px;font-weight:800;color:#0f6e56;margin-top:5px">${achieved.length} صك مكتمل</div>
-      <div style="font-size:9px;color:#5dcaa5;margin-top:2px">اكتسبت القطعية بنجاح</div>
+      <div style="font-size:14px;font-weight:800;color:#0f6e56;margin-top:5px">${achieved.length} صك اكتسب القطعية</div>
+      <div style="font-size:9px;color:#5dcaa5;margin-top:2px">الخطوة النهائية — مكتملة بنجاح</div>
     </div>
     <div style="display:flex;flex-direction:column;gap:8px">
-      ${achievedShow.map(achievedRow).join('')}
-      ${achievedMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#1d9e75;font-weight:600">+ ${achievedMore} صك آخر</div>`:''}
-    </div>`:'<div style="text-align:center;padding:30px;font-size:11px;color:#9aa0a8">لم يكتسب أي صك القطعية بعد</div>'}
+      ${achShow.map(achievedRow).join('')}
+      ${achMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#1d9e75;font-weight:600">+ ${achMore} صك آخر</div>`:''}
+    </div>`:`<div style="background:#EEF0F4;border-radius:14px;box-shadow:inset 4px 4px 8px #c8cdd4,inset -4px -4px 8px #ffffff;padding:24px;text-align:center"><div style="font-size:28px;opacity:.4">🏆</div><div style="font-size:11px;color:#9aa0a8;margin-top:8px">ستظهر هنا الصكوك التي تكتسب القطعية</div></div>`}
   </div>`;
 
-  colsEl.innerHTML=pendingCol+imminentCol+achievedCol;
+  colsEl.innerHTML=registeredCol+imminentCol+achievedCol;
 }
 
 function buildQatiyyaAlerts(){
