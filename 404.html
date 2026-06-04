@@ -834,6 +834,7 @@ body::after{
       <div class="tn" onclick="goPage('projects')" data-pg="projects"><span class="ni">⬡</span> المشاريع</div>
       <div class="tn" onclick="goPage('transactions')" data-pg="transactions"><span class="ni">≡</span> المعاملات</div>
       <div class="tn" onclick="goPage('map')" data-pg="map"><span class="ni">🌍</span> الخريطة</div>
+      <div class="tn" onclick="goPage('realestate')" data-pg="realestate"><span class="ni">🏛️</span> السجل العقاري</div>
       <div class="tn" onclick="goPage('timetrack')" data-pg="timetrack"><span class="ni">⏱</span> سجل ساعات العمل</div>
       <div class="tn manager-only" onclick="goPage('report')" data-pg="report"><span class="ni">▦</span> تقارير المعاملات</div>
       <div class="tn manager-only" onclick="goPage('audit')" data-pg="audit"><span class="ni">📋</span> سجل التدقيق</div>
@@ -1291,6 +1292,30 @@ body::after{
             <div class="card-body" style="padding:16px" id="execValidity"></div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ══ REAL ESTATE REGISTRY (السجل العقاري) ══ -->
+    <div id="pg-realestate" class="page">
+      <div class="p-wrap">
+        <!-- رأس الصفحة -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:22px">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:54px;height:54px;border-radius:16px;background:#EEF0F4;box-shadow:6px 6px 12px #c8cdd4,-6px -6px 12px #ffffff;display:flex;align-items:center;justify-content:center;font-size:25px">🏛️</div>
+            <div>
+              <div style="font-size:21px;font-weight:800;color:#3a3f47">السجل العقاري</div>
+              <div style="font-size:12px;color:#9aa0a8">متابعة اكتساب القطعية للصكوك العقارية</div>
+            </div>
+          </div>
+          <div style="background:#EEF0F4;border-radius:14px;box-shadow:inset 4px 4px 8px #c8cdd4,inset -4px -4px 8px #ffffff;padding:12px 18px;display:flex;align-items:center;gap:10px;min-width:300px">
+            <span style="color:#9aa0a8;font-size:15px">🔍</span>
+            <input id="reSearch" oninput="renderRealEstate()" placeholder="ابحث برقم العقار أو المشروع..." style="border:none;background:transparent;outline:none;font-family:inherit;font-size:12px;color:#3a3f47;flex:1">
+          </div>
+        </div>
+        <!-- بطاقات الملخص -->
+        <div id="reSummary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px"></div>
+        <!-- الأعمدة الثلاثة -->
+        <div id="reColumns" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px"></div>
       </div>
     </div>
 
@@ -2388,6 +2413,10 @@ body::after{
     <div class="mbody">
       <div style="background:linear-gradient(135deg,#ECFDF5,#F0FDF4);border:1px solid #6EE7B7;border-radius:12px;padding:16px">
         <div style="font-size:11px;color:#047857;margin-bottom:12px;line-height:1.6">أدخل تاريخ انتهاء التسجيل الفعلي. سيكتسب الصك القطعية بعد عام ميلادي كامل من هذا التاريخ.</div>
+        <div class="fg">
+          <label class="flbl" style="color:#065F46">🏠 رقم العقار</label>
+          <input type="text" class="finp" id="qePropertyNumber" placeholder="مثال: 4069 أو RES-2026-0445" style="border-color:#6EE7B7;font-family:'JetBrains Mono'">
+        </div>
         <div class="fg">
           <label class="flbl" style="color:#065F46">تاريخ انتهاء التسجيل الفعلي *</label>
           <input type="date" class="finp" id="qeRegEndDate" onchange="updateQeQatiyyaPreview()" style="border-color:#6EE7B7">
@@ -5590,7 +5619,7 @@ function filterTransactionsForLiaison(allTx){
 function goPage(pg){
   // GUARD: Liaison can only access specific pages
   if(currentUser?.role==='liaison'){
-    const liaisonAllowed=['projects','alerts','transactions','report','map'];
+    const liaisonAllowed=['projects','alerts','transactions','report','map','realestate'];
     if(!liaisonAllowed.includes(pg)){
       console.warn('🚫 Liaison blocked from page:',pg);
       pg='projects'; // redirect to allowed page
@@ -5637,6 +5666,7 @@ function goPage(pg){
     }
   }
   if(pg==='report') renderReport();
+  if(pg==='realestate') renderRealEstate();
   if(pg==='settings') renderSettings();
   if(pg==='alerts'){
     // Force fresh data fetch when entering alerts page
@@ -7578,7 +7608,7 @@ function openTxDetail(id,openTab){
           <span style="font-size:18px">⚖️</span>
           <div>
             <div style="font-size:12px;font-weight:700;color:#065F46">اكتساب القطعية</div>
-            ${t.qatiyyaDate?`<div style="font-size:11px;color:#047857;margin-top:2px">القطعية في: <b style="font-family:'JetBrains Mono'">${(()=>{const q=new Date(t.qatiyyaDate);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return q.getDate()+' '+m[q.getMonth()]+' '+q.getFullYear();})()}</b></div>`:`<div style="font-size:11px;color:#94A3B8;margin-top:2px">لم تُحدّد بعد</div>`}
+            ${t.qatiyyaDate?`<div style="font-size:11px;color:#047857;margin-top:2px">القطعية في: <b style="font-family:'JetBrains Mono'">${(()=>{const q=new Date(t.qatiyyaDate);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return q.getDate()+' '+m[q.getMonth()]+' '+q.getFullYear();})()}</b></div>${t.propertyNumber?`<div style="font-size:10px;color:#047857;margin-top:3px">🏠 رقم العقار: <b style="font-family:'JetBrains Mono'">${t.propertyNumber}</b></div>`:''}`:`<div style="font-size:11px;color:#94A3B8;margin-top:2px">لم تُحدّد بعد</div>`}
           </div>
         </div>
         <button class="btn bsm" onclick="openQatiyyaEditor('${t.id}')" style="background:#059669;color:#fff;border:none;font-weight:600">${t.qatiyyaDate?'✏️ تعديل':'+ إضافة تاريخ التسجيل'}</button>
@@ -7913,6 +7943,8 @@ function openQatiyyaEditor(txId){
   qatiyyaEditorTxId=txId;
   const regEl=document.getElementById('qeRegEndDate');
   if(regEl) regEl.value=t.registrationEndDate||'';
+  const propEl=document.getElementById('qePropertyNumber');
+  if(propEl) propEl.value=t.propertyNumber||'';
   updateQeQatiyyaPreview();
   openModal('mQatiyyaEditor');
 }
@@ -7936,11 +7968,14 @@ function saveQatiyyaEditor(){
   t.registrationEndDate=regEnd;
   const q=computeQatiyyaDate(regEnd);
   t.qatiyyaDate=q?q.toISOString().split('T')[0]:null;
+  const propNum=(document.getElementById('qePropertyNumber')?.value||'').trim();
+  if(propNum) t.propertyNumber=propNum; else delete t.propertyNumber;
   ss('v4_tx',transactions);
   closeModal('mQatiyyaEditor');
   toast('✅ تم حفظ بيانات القطعية','ok');
   openTxDetail(qatiyyaEditorTxId,'dets');
   renderAlerts&&renderAlerts();
+  if(document.getElementById('pg-realestate')?.classList.contains('active')) renderRealEstate();
 }
 function clearQatiyya(){
   if(!qatiyyaEditorTxId) return;
@@ -11126,6 +11161,147 @@ function setAlertView(mode,btn){
 // ════════════════════════════════════════════════════════════
 // QATIYYA (اكتساب القطعية) — بطاقات التنبيه للتسجيل العيني
 // ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// REAL ESTATE REGISTRY (السجل العقاري) — صفحة Neumorphism
+// ════════════════════════════════════════════════════════════
+function reFmtAr(d){
+  const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  return `${d.getDate()} ${m[d.getMonth()]} ${d.getFullYear()}`;
+}
+function renderRealEstate(){
+  const summaryEl=document.getElementById('reSummary');
+  const colsEl=document.getElementById('reColumns');
+  if(!summaryEl||!colsEl) return;
+
+  // تجميع صكوك RER التي لها تاريخ قطعية
+  const baseTx=isLiaison()?filterTransactionsForLiaison(transactions):transactions;
+  let rerTx=baseTx.filter(t=>t.issueCode==='RER'&&t.qatiyyaDate&&!t.hidden);
+
+  // البحث (برقم العقار أو المشروع أو الكود)
+  const q=(document.getElementById('reSearch')?.value||'').trim().toLowerCase();
+  if(q){
+    rerTx=rerTx.filter(t=>{
+      const projName=(projects.find(p=>p.code===t.projCode)?.name||t.proj||'').toLowerCase();
+      return (t.propertyNumber||'').toLowerCase().includes(q)||
+             projName.includes(q)||
+             (t.code||'').toLowerCase().includes(q)||
+             (t.name||'').toLowerCase().includes(q);
+    });
+  }
+
+  const today=new Date();today.setHours(0,0,0,0);
+  const achieved=[],imminent=[],pending=[];
+  rerTx.forEach(t=>{
+    const Qd=new Date(t.qatiyyaDate);Qd.setHours(0,0,0,0);
+    const daysToQ=Math.round((Qd-today)/86400000);
+    const projName=projects.find(p=>p.code===t.projCode)?.name||t.proj||t.projCode||'—';
+    const item={t,Qd,daysToQ,projName};
+    if(daysToQ<=0) achieved.push(item);
+    else if(daysToQ<=30) imminent.push(item);
+    else pending.push(item);
+  });
+  pending.sort((a,b)=>a.daysToQ-b.daysToQ);
+  imminent.sort((a,b)=>a.daysToQ-b.daysToQ);
+  achieved.sort((a,b)=>b.Qd-a.Qd);
+
+  // بطاقات الملخص
+  const sumBox=(icon,num,label,color)=>`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:18px;text-align:center">
+    <div style="width:50px;height:50px;border-radius:50%;background:#EEF0F4;box-shadow:inset 4px 4px 8px #c8cdd4,inset -4px -4px 8px #ffffff;display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 10px">${icon}</div>
+    <div style="font-size:28px;font-weight:800;color:${color};font-family:'JetBrains Mono'">${num}</div>
+    <div style="font-size:12px;color:#7a8089;font-weight:600;margin-top:3px">${label}</div>
+  </div>`;
+  summaryEl.innerHTML=sumBox('🏆',achieved.length,'اكتسب القطعية','#1d9e75')+
+    sumBox('⏰',imminent.length,'وشيك (أقل من 30 يوم)','#ef9f27')+
+    sumBox('📋',pending.length,'قيد الانتظار','#534ab7');
+
+  // دالة بناء دائرة التقدّم SVG
+  const ring=(daysToQ,color,track)=>{
+    const elapsed=365-daysToQ;
+    const pct=Math.max(0,Math.min(1,elapsed/365));
+    const r=22,circ=2*Math.PI*r,off=circ*(1-pct);
+    return `<svg width="56" height="56" viewBox="0 0 56 56" style="flex-shrink:0">
+      <circle cx="28" cy="28" r="${r}" fill="none" stroke="${track}" stroke-width="5.5"/>
+      <circle cx="28" cy="28" r="${r}" fill="none" stroke="${color}" stroke-width="5.5" stroke-linecap="round" stroke-dasharray="${circ.toFixed(0)}" stroke-dashoffset="${off.toFixed(0)}" transform="rotate(-90 28 28)"/>
+      <text x="28" y="26" text-anchor="middle" font-size="${daysToQ>99?'14':'15'}" font-weight="800" fill="${color}" font-family="JetBrains Mono">${daysToQ}</text>
+      <text x="28" y="37" text-anchor="middle" font-size="7" fill="#7a8089">يوم</text>
+    </svg>`;
+  };
+  // بطاقة صك (لقيد الانتظار والوشيك)
+  const deedCard=(item,color,track,accent)=>{
+    const {t,Qd,daysToQ,projName}=item;
+    const propHtml=t.propertyNumber?`<div style="padding:3px 7px;border-radius:6px;margin-top:5px;display:inline-block;background:#EEF0F4;box-shadow:inset 2px 2px 4px #c8cdd4,inset -2px -2px 4px #ffffff"><span style="font-size:8px;color:#7a8089">🏠</span> <b style="font-family:'JetBrains Mono';font-size:9px;color:#534ab7">${t.propertyNumber}</b></div>`:'';
+    return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;background:#EEF0F4;border-radius:12px;box-shadow:5px 5px 10px #c8cdd4,-5px -5px 10px #ffffff;padding:13px;display:flex;align-items:center;gap:13px;${accent?`border:2px solid ${accent}`:''}">
+      ${ring(daysToQ,color,track)}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:700;color:#3a3f47">${projName}</div>
+        <div style="font-size:8px;color:#9aa0a8;font-family:'JetBrains Mono';margin-top:2px">${t.code}</div>
+        ${propHtml}
+        <div style="font-size:8px;color:${color};font-family:'JetBrains Mono';margin-top:5px">القطعية: ${reFmtAr(Qd)}</div>
+      </div>
+    </div>`;
+  };
+
+  // ─── عمود: قيد الانتظار ───
+  const pendingShow=pending.slice(0,6);
+  const pendingMore=pending.length-pendingShow.length;
+  const pendingCol=`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:17px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:15px">
+      <span style="width:10px;height:10px;border-radius:50%;background:#534ab7;box-shadow:0 0 6px rgba(83,74,183,.5)"></span>
+      <span style="font-size:13px;font-weight:700;color:#3c3489">قيد الانتظار (${pending.length})</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:11px">
+      ${pendingShow.length?pendingShow.map(it=>deedCard(it,'#1d9e75','#e2e6ec',null)).join(''):'<div style="text-align:center;padding:20px;font-size:11px;color:#9aa0a8">لا صكوك</div>'}
+      ${pendingMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#534ab7;font-weight:600">+ ${pendingMore} صك آخر</div>`:''}
+    </div>
+  </div>`;
+
+  // ─── عمود: وشيك ───
+  const imminentShow=imminent.slice(0,6);
+  const imminentMore=imminent.length-imminentShow.length;
+  const imminentCol=`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:17px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:15px">
+      <span style="width:10px;height:10px;border-radius:50%;background:#ef9f27;box-shadow:0 0 6px rgba(239,159,39,.5)"></span>
+      <span style="font-size:13px;font-weight:700;color:#854f0b">وشيك (${imminent.length})</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:11px">
+      ${imminentShow.length?imminentShow.map(it=>deedCard(it,'#ef9f27','#FEF3C7','#ef9f27')).join(''):'<div style="text-align:center;padding:20px;font-size:11px;color:#9aa0a8">لا صكوك وشيكة</div>'}
+      ${imminentMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#ba7517;font-weight:600">+ ${imminentMore} صك</div>`:''}
+    </div>
+  </div>`;
+
+  // ─── عمود: اكتسب القطعية ───
+  const achievedShow=achieved.slice(0,4);
+  const achievedMore=achieved.length-achievedShow.length;
+  const achievedRow=(item)=>{
+    const {t,Qd,projName}=item;
+    return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;background:#EEF0F4;border-radius:12px;box-shadow:5px 5px 10px #c8cdd4,-5px -5px 10px #ffffff;padding:10px 12px;display:flex;align-items:center;gap:9px">
+      <span style="width:22px;height:22px;border-radius:50%;background:#1d9e75;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">✓</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;font-weight:700;color:#3a3f47;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${projName}</div>
+        ${t.propertyNumber?`<div style="font-size:8px;color:#9aa0a8;font-family:'JetBrains Mono'">${t.propertyNumber}</div>`:''}
+      </div>
+      <span style="font-size:9px;color:#1d9e75;font-family:'JetBrains Mono';font-weight:700">${Qd.getFullYear()}</span>
+    </div>`;
+  };
+  const achievedCol=`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:17px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:15px">
+      <span style="width:10px;height:10px;border-radius:50%;background:#1d9e75;box-shadow:0 0 6px rgba(29,158,117,.5)"></span>
+      <span style="font-size:13px;font-weight:700;color:#0f6e56">اكتسب القطعية (${achieved.length})</span>
+    </div>
+    ${achieved.length?`<div style="background:#EEF0F4;border-radius:14px;box-shadow:inset 4px 4px 8px #c8cdd4,inset -4px -4px 8px #ffffff;padding:16px;text-align:center;margin-bottom:11px">
+      <div style="font-size:30px">🏆</div>
+      <div style="font-size:14px;font-weight:800;color:#0f6e56;margin-top:5px">${achieved.length} صك مكتمل</div>
+      <div style="font-size:9px;color:#5dcaa5;margin-top:2px">اكتسبت القطعية بنجاح</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${achievedShow.map(achievedRow).join('')}
+      ${achievedMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#1d9e75;font-weight:600">+ ${achievedMore} صك آخر</div>`:''}
+    </div>`:'<div style="text-align:center;padding:30px;font-size:11px;color:#9aa0a8">لم يكتسب أي صك القطعية بعد</div>'}
+  </div>`;
+
+  colsEl.innerHTML=pendingCol+imminentCol+achievedCol;
+}
+
 function buildQatiyyaAlerts(){
   // كل معاملات RER المنجزة التي لها تاريخ قطعية محسوب
   const baseTx=isLiaison()?filterTransactionsForLiaison(transactions):transactions;
