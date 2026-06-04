@@ -479,7 +479,8 @@ body::after{
 .p-wrap{padding:24px 28px}
 /* Neumorphism surface backgrounds for the three themed pages */
 #pg-dash .p-wrap,#pg-transactions .p-wrap,#pg-alerts .p-wrap,#pg-realestate .p-wrap{background:#EEF0F4}
-#pg-dash,#pg-transactions,#pg-alerts,#pg-realestate{background:#EEF0F4}
+#pg-dash,#pg-transactions,#pg-alerts{background:#EEF0F4}
+#pg-realestate,#pg-realestate .p-wrap{background:#F0F2F5}
 /* Neumorphism inputs/selects on themed pages (carved-in look) */
 #pg-transactions .sinp,#pg-transactions .fsel,#pg-alerts .sinp,#pg-alerts .fsel{background:#EEF0F4;border:none;box-shadow:inset 3px 3px 6px #d2d6dd,inset -3px -3px 6px #ffffff;color:#0F172A}
 #pg-transactions .sinp:focus,#pg-transactions .fsel:focus,#pg-alerts .sinp:focus,#pg-alerts .fsel:focus{box-shadow:inset 4px 4px 8px #cdd1d9,inset -4px -4px 8px #ffffff}
@@ -1301,15 +1302,15 @@ body::after{
         <!-- رأس الصفحة -->
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:22px">
           <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:54px;height:54px;border-radius:16px;background:#EEF0F4;box-shadow:6px 6px 12px #c8cdd4,-6px -6px 12px #ffffff;display:flex;align-items:center;justify-content:center;font-size:25px">🏛️</div>
+            <div style="width:54px;height:54px;border-radius:16px;background:#F0F2F5;box-shadow:6px 6px 12px #c8ccd4,-6px -6px 12px #ffffff;display:flex;align-items:center;justify-content:center;font-size:25px">🏛️</div>
             <div>
-              <div style="font-size:21px;font-weight:800;color:#3a3f47">السجل العقاري</div>
-              <div style="font-size:12px;color:#9aa0a8">متابعة اكتساب القطعية للصكوك العقارية</div>
+              <div style="font-size:21px;font-weight:800;color:#334155">السجل العقاري</div>
+              <div style="font-size:12px;color:#94a3b8">متابعة اكتساب القطعية للصكوك العقارية</div>
             </div>
           </div>
-          <div style="background:#EEF0F4;border-radius:14px;box-shadow:inset 4px 4px 8px #c8cdd4,inset -4px -4px 8px #ffffff;padding:12px 18px;display:flex;align-items:center;gap:10px;min-width:300px">
-            <span style="color:#9aa0a8;font-size:15px">🔍</span>
-            <input id="reSearch" oninput="renderRealEstate()" placeholder="ابحث برقم العقار أو المشروع..." style="border:none;background:transparent;outline:none;font-family:inherit;font-size:12px;color:#3a3f47;flex:1">
+          <div style="background:#F0F2F5;border-radius:14px;box-shadow:inset 4px 4px 8px #c8ccd4,inset -4px -4px 8px #ffffff;padding:12px 18px;display:flex;align-items:center;gap:10px;min-width:300px">
+            <span style="color:#94a3b8;font-size:15px">🔍</span>
+            <input id="reSearch" oninput="renderRealEstate()" placeholder="ابحث برقم العقار أو المشروع..." style="border:none;background:transparent;outline:none;font-family:inherit;font-size:12px;color:#334155;flex:1">
           </div>
         </div>
         <!-- بطاقات الملخص -->
@@ -8934,12 +8935,16 @@ function buildTxTimelineHtml(txId){
   if(t.createdAt){
     events.push({type:'create',label:'⊕ إنشاء المعاملة',text:t.purpose||'تم إنشاء المعاملة',by:t.ownerName||t.assignedByName||'النظام',timestamp:t.createdAt});
   }
-  (t.steps||[]).forEach(s=>{
+  (t.steps||[]).forEach((s,si)=>{
     let type='update',label='✎ تحديث';
     if(s.type==='note'){type='note';label='💬 ملاحظة';}
     else if(s.status==='منجزة'){type='done';label='✅ تم الإنجاز';}
     else if(s.status){type='update';label=`✎ تحديث (${s.status})`;}
-    events.push({type,label,text:s.text||s.note||'',by:s.by||'مستخدم',timestamp:s.date?new Date(s.date).getTime():(s.timestamp||Date.now()),status:s.status,attachments:s.attachments||[],govNum:s.govNum||''});
+    // طابع زمني: الرقمي أولاً، ثم تحويل آمن للتاريخ، وإلا تقدير حسب createdAt + ترتيب الخطوة
+    let stepTs=s.ts||s.timestamp;
+    if(!stepTs&&s.date&&!isNaN(new Date(s.date).getTime())) stepTs=new Date(s.date).getTime();
+    if(!stepTs){ const base=t.createdAt||Date.now()-((t.steps.length-si)*60000); stepTs=base+(si+1)*60000; }
+    events.push({type,label,text:s.text||s.note||'',by:s.by||'مستخدم',timestamp:stepTs,status:s.status,attachments:s.attachments||[],govNum:s.govNum||''});
   });
   if(t.assignedAt&&t.assignee){
     const u=users.find(u=>u.email===t.assignee);
@@ -9612,6 +9617,7 @@ function saveStep(){
     type:'update',
     text:note,
     date:now_(),
+    ts:Date.now(),
     by:currentUser.name,
     byEmail:currentUser.email,
     note:'',
@@ -11230,15 +11236,15 @@ function renderRealEstate(){
   imminent.sort((a,b)=>a.daysToQ-b.daysToQ);
   achieved.sort((a,b)=>b.Qd-a.Qd);
 
-  // بطاقات الملخص — كلها إيجابية
-  const sumBox=(icon,num,label,color)=>`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:18px;text-align:center">
-    <div style="width:50px;height:50px;border-radius:50%;background:#EEF0F4;box-shadow:inset 4px 4px 8px #c8cdd4,inset -4px -4px 8px #ffffff;display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 10px">${icon}</div>
+  // بطاقات الملخص — ثيم Teal/Emerald
+  const sumBox=(icon,num,label,color)=>`<div style="background:#F0F2F5;border-radius:20px;box-shadow:8px 8px 16px #c8ccd4,-8px -8px 16px #ffffff;padding:18px;text-align:center">
+    <div style="width:50px;height:50px;border-radius:50%;background:#F0F2F5;box-shadow:inset 4px 4px 8px #c8ccd4,inset -4px -4px 8px #ffffff;display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 10px">${icon}</div>
     <div style="font-size:28px;font-weight:800;color:${color};font-family:'JetBrains Mono'">${num}</div>
-    <div style="font-size:12px;color:#7a8089;font-weight:600;margin-top:3px">${label}</div>
+    <div style="font-size:12px;color:#64748b;font-weight:600;margin-top:3px">${label}</div>
   </div>`;
-  summaryEl.innerHTML=sumBox('📋',registered.length,'تم التسجيل','#534ab7')+
-    sumBox('⏰',imminent.length,'قطعية وشيكة','#ef9f27')+
-    sumBox('🏆',achieved.length,'اكتسب القطعية','#1d9e75');
+  summaryEl.innerHTML=sumBox('📝',registered.length,'تم التسجيل','#0F766E')+
+    sumBox('⏰',imminent.length,'قطعية وشيكة','#F59E0B')+
+    sumBox('🏆',achieved.length,'اكتسب القطعية','#10B981');
 
   // دالة بناء دائرة التقدّم SVG
   const ring=(daysToQ,color,track)=>{
@@ -11249,82 +11255,82 @@ function renderRealEstate(){
       <circle cx="28" cy="28" r="${r}" fill="none" stroke="${track}" stroke-width="5.5"/>
       <circle cx="28" cy="28" r="${r}" fill="none" stroke="${color}" stroke-width="5.5" stroke-linecap="round" stroke-dasharray="${circ.toFixed(0)}" stroke-dashoffset="${off.toFixed(0)}" transform="rotate(-90 28 28)"/>
       <text x="28" y="26" text-anchor="middle" font-size="${daysToQ>99?'14':'15'}" font-weight="800" fill="${color}" font-family="JetBrains Mono">${daysToQ}</text>
-      <text x="28" y="37" text-anchor="middle" font-size="7" fill="#7a8089">يوم</text>
+      <text x="28" y="37" text-anchor="middle" font-size="7" fill="#64748b">يوم</text>
     </svg>`;
   };
-  // بطاقة صك مسجّل (تم تسجيله وينتظر القطعية)
+  // بطاقة صك مسجّل
   const deedCard=(item,color,track,accent)=>{
     const {t,Qd,daysToQ,projName}=item;
-    const propHtml=t.propertyNumber?`<div style="padding:3px 7px;border-radius:6px;margin-top:5px;display:inline-block;background:#EEF0F4;box-shadow:inset 2px 2px 4px #c8cdd4,inset -2px -2px 4px #ffffff"><span style="font-size:8px;color:#7a8089">🏠</span> <b style="font-family:'JetBrains Mono';font-size:9px;color:#534ab7">${t.propertyNumber}</b></div>`:'';
-    return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;background:#EEF0F4;border-radius:12px;box-shadow:5px 5px 10px #c8cdd4,-5px -5px 10px #ffffff;padding:13px;display:flex;align-items:center;gap:13px;${accent?`border:2px solid ${accent}`:''}">
+    const propHtml=t.propertyNumber?`<div style="padding:3px 7px;border-radius:6px;margin-top:5px;display:inline-block;background:#F0F2F5;box-shadow:inset 2px 2px 4px #c8ccd4,inset -2px -2px 4px #ffffff"><span style="font-size:8px;color:#64748b">🏠</span> <b style="font-family:'JetBrains Mono';font-size:9px;color:#0F766E">${t.propertyNumber}</b></div>`:'';
+    return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;background:#F0F2F5;border-radius:14px;box-shadow:5px 5px 10px #c8ccd4,-5px -5px 10px #ffffff;padding:13px;display:flex;align-items:center;gap:13px;${accent?`border:2px solid ${accent}`:''}">
       ${ring(daysToQ,color,track)}
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;font-weight:700;color:#3a3f47">${projName}</span><span style="font-size:8px;color:#1d9e75;background:#EEF0F4;box-shadow:inset 1px 1px 2px #c8cdd4,inset -1px -1px 2px #ffffff;padding:1px 6px;border-radius:5px">✓ مُسجّل</span></div>
-        <div style="font-size:8px;color:#9aa0a8;font-family:'JetBrains Mono';margin-top:3px">${t.code}</div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;font-weight:700;color:#334155">${projName}</span><span style="font-size:8px;color:#0F766E;background:#F0F2F5;box-shadow:inset 1px 1px 2px #c8ccd4,inset -1px -1px 2px #ffffff;padding:1px 6px;border-radius:5px">✓ مُسجّل</span></div>
+        <div style="font-size:8px;color:#94a3b8;font-family:'JetBrains Mono';margin-top:3px">${t.code}</div>
         ${propHtml}
         <div style="font-size:8px;color:${color};font-family:'JetBrains Mono';margin-top:5px">القطعية: ${reFmtAr(Qd)}</div>
       </div>
     </div>`;
   };
 
-  // ─── عمود: تم التسجيل (ينتظر القطعية) ───
+  // ─── عمود: تم التسجيل ───
   const regShow=registered.slice(0,8);
   const regMore=registered.length-regShow.length;
-  const registeredCol=`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:17px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:15px">
-      <span style="width:10px;height:10px;border-radius:50%;background:#534ab7;box-shadow:0 0 6px rgba(83,74,183,.5)"></span>
-      <span style="font-size:13px;font-weight:700;color:#3c3489">تم التسجيل (${registered.length})</span>
+  const registeredCol=`<div style="background:#F0F2F5;border-radius:20px;box-shadow:8px 8px 16px #c8ccd4,-8px -8px 16px #ffffff;padding:17px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="width:10px;height:10px;border-radius:50%;background:#0F766E;box-shadow:0 0 6px rgba(15,118,110,.4)"></span>
+      <span style="font-size:13px;font-weight:700;color:#0F766E">تم التسجيل (${registered.length})</span>
     </div>
-    <div style="font-size:10px;color:#7a8089;margin-bottom:12px;line-height:1.5">صكوك سُجّلت بنجاح وتسير نحو اكتساب القطعية</div>
+    <div style="font-size:10px;color:#94a3b8;margin-bottom:14px">صكوك سُجّلت بنجاح وتسير نحو اكتساب القطعية</div>
     <div style="display:flex;flex-direction:column;gap:11px">
-      ${regShow.length?regShow.map(it=>deedCard(it,'#1d9e75','#e2e6ec',null)).join(''):'<div style="text-align:center;padding:20px;font-size:11px;color:#9aa0a8">لا صكوك مسجّلة بعد</div>'}
-      ${regMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#534ab7;font-weight:600">+ ${regMore} صك آخر</div>`:''}
+      ${regShow.length?regShow.map(it=>deedCard(it,'#14B8A6','#dde3ea',null)).join(''):'<div style="text-align:center;padding:20px;font-size:11px;color:#94a3b8">لا صكوك مسجّلة بعد</div>'}
+      ${regMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#0F766E;font-weight:600">+ ${regMore} صك آخر</div>`:''}
     </div>
   </div>`;
 
   // ─── عمود: قطعية وشيكة ───
   const immShow=imminent.slice(0,8);
   const immMore=imminent.length-immShow.length;
-  const imminentCol=`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:17px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:15px">
-      <span style="width:10px;height:10px;border-radius:50%;background:#ef9f27;box-shadow:0 0 6px rgba(239,159,39,.5)"></span>
-      <span style="font-size:13px;font-weight:700;color:#854f0b">قطعية وشيكة (${imminent.length})</span>
+  const imminentCol=`<div style="background:#F0F2F5;border-radius:20px;box-shadow:8px 8px 16px #c8ccd4,-8px -8px 16px #ffffff;padding:17px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="width:10px;height:10px;border-radius:50%;background:#F59E0B;box-shadow:0 0 6px rgba(245,158,11,.4)"></span>
+      <span style="font-size:13px;font-weight:700;color:#b45309">قطعية وشيكة (${imminent.length})</span>
     </div>
-    <div style="font-size:10px;color:#7a8089;margin-bottom:12px;line-height:1.5">على وشك اكتساب القطعية خلال 30 يوماً</div>
+    <div style="font-size:10px;color:#94a3b8;margin-bottom:14px">على وشك اكتساب القطعية خلال 30 يوماً</div>
     <div style="display:flex;flex-direction:column;gap:11px">
-      ${immShow.length?immShow.map(it=>deedCard(it,'#ef9f27','#FEF3C7','#ef9f27')).join(''):'<div style="text-align:center;padding:20px;font-size:11px;color:#9aa0a8">لا صكوك وشيكة حالياً</div>'}
-      ${immMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#ba7517;font-weight:600">+ ${immMore} صك</div>`:''}
+      ${immShow.length?immShow.map(it=>deedCard(it,'#F59E0B','#FEF3C7','#F59E0B')).join(''):'<div style="text-align:center;padding:20px;font-size:11px;color:#94a3b8">لا صكوك وشيكة حالياً</div>'}
+      ${immMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#b45309;font-weight:600">+ ${immMore} صك</div>`:''}
     </div>
   </div>`;
 
-  // ─── عمود: اكتسب القطعية (التتويج النهائي) ───
+  // ─── عمود: اكتسب القطعية ───
   const achShow=achieved.slice(0,5);
   const achMore=achieved.length-achShow.length;
   const achievedRow=(item)=>{
     const {t,Qd,projName}=item;
-    return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;background:#EEF0F4;border-radius:12px;box-shadow:5px 5px 10px #c8cdd4,-5px -5px 10px #ffffff;padding:10px 12px;display:flex;align-items:center;gap:9px">
-      <span style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#34D399,#1d9e75);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">🏆</span>
+    return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;background:#F0F2F5;border-radius:14px;box-shadow:5px 5px 10px #c8ccd4,-5px -5px 10px #ffffff;padding:10px 12px;display:flex;align-items:center;gap:9px">
+      <span style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#34D399,#10B981);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">🏆</span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;color:#3a3f47;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${projName}</div>
-        ${t.propertyNumber?`<div style="font-size:8px;color:#9aa0a8;font-family:'JetBrains Mono'">🏠 ${t.propertyNumber}</div>`:`<div style="font-size:8px;color:#9aa0a8;font-family:'JetBrains Mono'">${t.code}</div>`}
+        <div style="font-size:10px;font-weight:700;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${projName}</div>
+        ${t.propertyNumber?`<div style="font-size:8px;color:#94a3b8;font-family:'JetBrains Mono'">🏠 ${t.propertyNumber}</div>`:`<div style="font-size:8px;color:#94a3b8;font-family:'JetBrains Mono'">${t.code}</div>`}
       </div>
-      <span style="font-size:9px;color:#1d9e75;font-family:'JetBrains Mono';font-weight:700">${Qd.getFullYear()}</span>
+      <span style="font-size:9px;color:#10B981;font-family:'JetBrains Mono';font-weight:700">${Qd.getFullYear()}</span>
     </div>`;
   };
-  const achievedCol=`<div style="background:#EEF0F4;border-radius:20px;box-shadow:8px 8px 16px #c8cdd4,-8px -8px 16px #ffffff;padding:17px">
+  const achievedCol=`<div style="background:#F0F2F5;border-radius:20px;box-shadow:8px 8px 16px #c8ccd4,-8px -8px 16px #ffffff;padding:17px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:15px">
-      <span style="width:10px;height:10px;border-radius:50%;background:#1d9e75;box-shadow:0 0 6px rgba(29,158,117,.5)"></span>
-      <span style="font-size:13px;font-weight:700;color:#0f6e56">اكتسب القطعية (${achieved.length})</span>
+      <span style="width:10px;height:10px;border-radius:50%;background:#10B981;box-shadow:0 0 6px rgba(16,185,129,.4)"></span>
+      <span style="font-size:13px;font-weight:700;color:#047857">اكتسب القطعية (${achieved.length})</span>
     </div>
-    ${achieved.length?`<div style="background:#EEF0F4;border-radius:14px;box-shadow:inset 4px 4px 8px #c8cdd4,inset -4px -4px 8px #ffffff;padding:16px;text-align:center;margin-bottom:11px">
+    ${achieved.length?`<div style="background:#F0F2F5;border-radius:14px;box-shadow:inset 4px 4px 8px #c8ccd4,inset -4px -4px 8px #ffffff;padding:16px;text-align:center;margin-bottom:11px">
       <div style="font-size:30px">🏆</div>
-      <div style="font-size:14px;font-weight:800;color:#0f6e56;margin-top:5px">${achieved.length} صك اكتسب القطعية</div>
+      <div style="font-size:14px;font-weight:800;color:#047857;margin-top:5px">${achieved.length} صك اكتسب القطعية</div>
       <div style="font-size:9px;color:#5dcaa5;margin-top:2px">الخطوة النهائية — مكتملة بنجاح</div>
     </div>
     <div style="display:flex;flex-direction:column;gap:8px">
       ${achShow.map(achievedRow).join('')}
-      ${achMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#1d9e75;font-weight:600">+ ${achMore} صك آخر</div>`:''}
-    </div>`:`<div style="background:#EEF0F4;border-radius:14px;box-shadow:inset 4px 4px 8px #c8cdd4,inset -4px -4px 8px #ffffff;padding:24px;text-align:center"><div style="font-size:28px;opacity:.4">🏆</div><div style="font-size:11px;color:#9aa0a8;margin-top:8px">ستظهر هنا الصكوك التي تكتسب القطعية</div></div>`}
+      ${achMore>0?`<div style="text-align:center;padding:7px;font-size:10px;color:#10B981;font-weight:600">+ ${achMore} صك آخر</div>`:''}
+    </div>`:`<div style="background:#F0F2F5;border-radius:14px;box-shadow:inset 4px 4px 8px #c8ccd4,inset -4px -4px 8px #ffffff;padding:24px;text-align:center"><div style="font-size:28px;opacity:.4">🏆</div><div style="font-size:11px;color:#94a3b8;margin-top:8px">ستظهر هنا الصكوك التي تكتسب القطعية</div></div>`}
   </div>`;
 
   colsEl.innerHTML=registeredCol+imminentCol+achievedCol;
