@@ -2272,6 +2272,11 @@ body::after{
         <div style="font-size:10px;color:var(--sub);margin-top:4px">💡 اكتب وصفاً واضحاً يفهمه المدير والجهات الأخرى</div>
       </div>
 
+      <div class="fg">
+        <label class="flbl">📅 تاريخ ووقت الحركة <span style="color:var(--sub);font-weight:400">(اتركه فارغاً ليأخذ وقت النظام تلقائياً)</span></label>
+        <div id="stepDateWrap"></div>
+      </div>
+
       <div class="frow">
         <div class="fg">
           <label class="flbl">🔄 تغيير الحالة</label>
@@ -2414,6 +2419,110 @@ body::after{
 </div>
 
 <!-- QATIYYA EDITOR MODAL (محرر بيانات القطعية المستقل) -->
+<!-- نافذة بدء تصحيح التسجيل -->
+<div class="mb" id="mCorrectReg">
+  <div class="modal" style="max-width:440px">
+    <div class="mhdr">
+      <div><h2>🔧 تصحيح التسجيل</h2><p style="font-size:11px;color:var(--text2)">التسجيل قائم لكن به خطأ — سجّل تفاصيل التصحيح</p></div>
+      <button class="mclose" onclick="closeModal('mCorrectReg')">✕</button>
+    </div>
+    <div class="mbody">
+      <div class="fg">
+        <label class="flbl">🔧 سبب/تفاصيل التصحيح *</label>
+        <textarea class="fta" id="corrReason" placeholder="مثال: خطأ في رقم العقار، تصحيح المساحة، تعديل بيانات المالك..." style="min-height:80px"></textarea>
+      </div>
+      <div class="fg">
+        <label class="flbl">📅 تاريخ بدء التصحيح <span style="color:var(--sub);font-weight:400">(فارغ = اليوم)</span></label>
+        <div id="corrDateWrap"></div>
+      </div>
+    </div>
+    <div class="mftr">
+      <button class="btn bs" onclick="closeModal('mCorrectReg')">إلغاء</button>
+      <button class="btn bp" onclick="saveCorrectRegistration()" style="background:linear-gradient(135deg,#7C3AED,#6D28D9)">🔧 بدء التصحيح</button>
+    </div>
+  </div>
+</div>
+
+<!-- نافذة إكمال التصحيح -->
+<div class="mb" id="mCompleteCorr">
+  <div class="modal" style="max-width:440px">
+    <div class="mhdr">
+      <div><h2>✅ إكمال التصحيح</h2><p style="font-size:11px;color:var(--text2)">بعد تصحيح الخطأ، أكّد اكتمال التصحيح</p></div>
+      <button class="mclose" onclick="closeModal('mCompleteCorr')">✕</button>
+    </div>
+    <div class="mbody">
+      <div style="background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.2);border-radius:10px;padding:12px;margin-bottom:14px">
+        <div style="font-size:11px;color:var(--text2);font-weight:600;margin-bottom:3px">سبب التصحيح:</div>
+        <div style="font-size:12px;color:#6D28D9;font-weight:700" id="corrCompPrevReason">—</div>
+      </div>
+      <div class="fg">
+        <label class="flbl">📝 ملاحظة الإكمال <span style="color:var(--sub);font-weight:400">(اختياري)</span></label>
+        <textarea class="fta" id="corrCompNote" placeholder="مثال: تم تصحيح رقم العقار إلى كذا..." style="min-height:70px"></textarea>
+      </div>
+      <div class="fg">
+        <label class="flbl">📅 تاريخ إكمال التصحيح <span style="color:var(--sub);font-weight:400">(فارغ = اليوم)</span></label>
+        <div id="corrCompDateWrap"></div>
+      </div>
+    </div>
+    <div class="mftr">
+      <button class="btn bs" onclick="closeModal('mCompleteCorr')">إلغاء</button>
+      <button class="btn bp" onclick="saveCompleteCorrection()" style="background:linear-gradient(135deg,#059669,#047857)">✅ تأكيد الإكمال</button>
+    </div>
+  </div>
+</div>
+
+<!-- نافذة تسجيل رفض التسجيل -->
+<div class="mb" id="mRejectReg">
+  <div class="modal" style="max-width:440px">
+    <div class="mhdr">
+      <div><h2>⚠️ تسجيل رفض التسجيل</h2><p style="font-size:11px;color:var(--text2)">سُجّل سبب الرفض ليُعالج لاحقاً</p></div>
+      <button class="mclose" onclick="closeModal('mRejectReg')">✕</button>
+    </div>
+    <div class="mbody">
+      <div class="fg">
+        <label class="flbl">✕ سبب الرفض *</label>
+        <textarea class="fta" id="rejReason" placeholder="مثال: عدم وجود قرار مساحي، نقص مستندات، تعارض في الحدود..." style="min-height:80px"></textarea>
+      </div>
+      <div class="fg">
+        <label class="flbl">📅 تاريخ الرفض <span style="color:var(--sub);font-weight:400">(فارغ = اليوم)</span></label>
+        <div id="rejDateWrap"></div>
+      </div>
+    </div>
+    <div class="mftr">
+      <button class="btn bs" onclick="closeModal('mRejectReg')">إلغاء</button>
+      <button class="btn bp" onclick="saveRejectRegistration()" style="background:linear-gradient(135deg,#dc2626,#b91c1c)">⚠️ تأكيد الرفض</button>
+    </div>
+  </div>
+</div>
+
+<!-- نافذة معالجة وإعادة تقديم -->
+<div class="mb" id="mReprocessReg">
+  <div class="modal" style="max-width:440px">
+    <div class="mhdr">
+      <div><h2>🔄 معالجة وإعادة تقديم</h2><p style="font-size:11px;color:var(--text2)">بعد معالجة سبب الرفض، أعد الصك لمساره</p></div>
+      <button class="mclose" onclick="closeModal('mReprocessReg')">✕</button>
+    </div>
+    <div class="mbody">
+      <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:12px;margin-bottom:14px">
+        <div style="font-size:11px;color:#64748b;font-weight:600;margin-bottom:3px">سبب الرفض السابق:</div>
+        <div style="font-size:12px;color:#dc2626;font-weight:700" id="reprocPrevReason">—</div>
+      </div>
+      <div class="fg">
+        <label class="flbl">📝 ملاحظة المعالجة <span style="color:var(--sub);font-weight:400">(اختياري)</span></label>
+        <textarea class="fta" id="reprocNote" placeholder="مثال: تم توفير القرار المساحي رقم كذا..." style="min-height:70px"></textarea>
+      </div>
+      <div class="fg">
+        <label class="flbl">📅 تاريخ إعادة التقديم <span style="color:var(--sub);font-weight:400">(فارغ = اليوم)</span></label>
+        <div id="reprocDateWrap"></div>
+      </div>
+    </div>
+    <div class="mftr">
+      <button class="btn bs" onclick="closeModal('mReprocessReg')">إلغاء</button>
+      <button class="btn bp" onclick="saveReprocessRejection()" style="background:linear-gradient(135deg,#0F766E,#14B8A6)">🔄 إعادة التقديم</button>
+    </div>
+  </div>
+</div>
+
 <div class="mb" id="mQatiyyaEditor">
   <div class="modal" style="max-width:440px">
     <div class="mhdr">
@@ -6378,7 +6487,7 @@ function renderDashTimeline(){
   const maxT=allEnds.length?Math.max(...allEnds):Date.now();
   const span=Math.max(maxT-minT,86400000);
   const fmt=ts=>{const d=new Date(ts);return d.getDate()+'/'+(d.getMonth()+1);};
-  const fmtYr=ts=>{const d=new Date(ts);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];const yy=String(d.getFullYear()).slice(-2);return d.getDate()+' '+m[d.getMonth()]+' '+yy;};
+  const fmtYr=ts=>{const d=new Date(ts);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return d.getDate()+' '+m[d.getMonth()]+' '+d.getFullYear();};
 
   if(!window._dashTimelineExpanded) window._dashTimelineExpanded={};
   const expanded=window._dashTimelineExpanded;
@@ -6808,7 +6917,7 @@ function txHtml(t){
   const parentTx=t.parentId?transactions.find(x=>x.id===t.parentId):null;
   const parentBadge=parentTx?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(79,70,229,.08);color:var(--indigo);font-weight:600;border:1px solid rgba(79,70,229,.15)" title="${parentTx.name}">🔗 ${parentTx.code}</span>`:'';
   // Creation date
-  const createdDt=t.createdAt?new Date(t.createdAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'';
+  const createdDt=t.createdAt?new Date(t.createdAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'';
   // Build assignee display
   const assigneeName=t.assignee?users.find(u=>u.email===t.assignee)?.name||'':'';
   const issueName=allIssues().find(i=>i.code===t.issueCode)?.name||t.issueCode;
@@ -6994,7 +7103,7 @@ function insightTimeline(tx){
         ${m.pending?`<div style="background:var(--warn);height:${(m.pending/m.count)*100}%;width:100%"></div>`:''}
         ${m.late?`<div style="background:var(--danger);height:${(m.late/m.count)*100}%;width:100%"></div>`:''}
       </div>
-      <div style="font-size:9px;color:var(--text3);transform:rotate(-30deg);transform-origin:right top;white-space:nowrap;margin-top:6px">${monthName.slice(0,3)} ${y.slice(-2)}</div>
+      <div style="font-size:9px;color:var(--text3);transform:rotate(-30deg);transform-origin:right top;white-space:nowrap;margin-top:6px">${monthName.slice(0,3)} ${y}</div>
     </div>`;
   });
   html+='</div><div style="display:flex;gap:14px;margin-top:14px;justify-content:center;font-size:11px">';
@@ -7524,7 +7633,7 @@ function saveTx(){
       return pendingAtts.slice();
     })(),
     govRefs:[],
-    steps:[{text:'تم إنشاء المعاملة',date:now_(),status:'تحت الإجراء',by:currentUser.name}],
+    steps:[{text:'تم إنشاء المعاملة',date:now_(),ts:Date.now(),status:'تحت الإجراء',by:currentUser.name}],
     createdAt:Date.now(),
     pendingApproval:isEmployeeRequest?true:false,
     requestedBy:isEmployeeRequest?currentUser.id:null,
@@ -7612,18 +7721,33 @@ function openTxDetail(id,openTab){
         return `<button class="btn bs bsm" onclick="chStatus('${t.id}','${s}')">${s}</button>`;
       }).join('')}
     </div>
-    ${t.issueCode==='RER'?`<div style="margin-top:12px;padding:14px;background:linear-gradient(135deg,#ECFDF5,#F0FDF4);border:1px solid #6EE7B7;border-radius:12px">
+    ${t.issueCode==='RER'?(t.rerRejected?`<div style="margin-top:12px;padding:14px;background:linear-gradient(135deg,#FEF2F2,#FEE2E2);border:1px solid #FCA5A5;border-radius:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:18px">⚠️</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#991B1B">مرفوض التسجيل</div>
+            <div style="font-size:11px;color:#dc2626;margin-top:2px">السبب: ${t.rejectReason||'غير محدد'}</div>
+            ${t.rejectDate?`<div style="font-size:10px;color:#94A3B8;margin-top:3px">رُفض في: <b style="font-family:'JetBrains Mono'">${(()=>{const q=new Date(t.rejectDate);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return q.getDate()+' '+m[q.getMonth()]+' '+q.getFullYear();})()}</b></div>`:''}
+          </div>
+        </div>
+        <button class="btn bsm" onclick="openReprocessRejection('${t.id}')" style="background:linear-gradient(135deg,#0F766E,#14B8A6);color:#fff;border:none;font-weight:600">🔄 معالجة وإعادة تقديم</button>
+      </div>
+    </div>`:`<div style="margin-top:12px;padding:14px;background:linear-gradient(135deg,#ECFDF5,#F0FDF4);border:1px solid #6EE7B7;border-radius:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:18px">⚖️</span>
           <div>
-            <div style="font-size:12px;font-weight:700;color:#065F46">اكتساب القطعية</div>
-            ${t.qatiyyaDate?`<div style="font-size:11px;color:#047857;margin-top:2px">القطعية في: <b style="font-family:'JetBrains Mono'">${(()=>{const q=new Date(t.qatiyyaDate);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return q.getDate()+' '+m[q.getMonth()]+' '+q.getFullYear();})()}</b></div>${t.propertyNumber?`<div style="font-size:10px;color:#047857;margin-top:3px">🏠 رقم العقار: <b style="font-family:'JetBrains Mono'">${t.propertyNumber}</b></div>`:''}`:`<div style="font-size:11px;color:#94A3B8;margin-top:2px">لم تُحدّد بعد</div>`}
+            <div style="font-size:12px;font-weight:700;color:#065F46;display:flex;align-items:center;gap:6px">اكتساب القطعية ${t.rerCorrecting?'<span style="font-size:9px;background:rgba(124,58,237,.12);color:#6D28D9;padding:2px 8px;border-radius:10px;font-weight:700">🔧 قيد التصحيح</span>':''}</div>
+            ${t.qatiyyaDate?`<div style="font-size:11px;color:#047857;margin-top:2px">القطعية في: <b style="font-family:'JetBrains Mono'">${(()=>{const q=new Date(t.qatiyyaDate);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return q.getDate()+' '+m[q.getMonth()]+' '+q.getFullYear();})()}</b></div>${t.propertyNumber?`<div style="font-size:10px;color:#047857;margin-top:3px">🏠 رقم العقار: <b style="font-family:'JetBrains Mono'">${t.propertyNumber}</b></div>`:''}${t.rerCorrecting&&t.correctionReason?`<div style="font-size:10px;color:#6D28D9;margin-top:3px">🔧 سبب التصحيح: ${t.correctionReason}</div>`:''}${t.correctionDoneDate&&!t.rerCorrecting?`<div style="font-size:10px;color:#059669;margin-top:3px">✅ تم تصحيح التسجيل بتاريخ: <b style="font-family:'JetBrains Mono'">${(()=>{const q=new Date(t.correctionDoneDate);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return q.getDate()+' '+m[q.getMonth()]+' '+q.getFullYear();})()}</b></div>`:''}`:`<div style="font-size:11px;color:#94A3B8;margin-top:2px">لم تُحدّد بعد</div>`}
           </div>
         </div>
-        <button class="btn bsm" onclick="openQatiyyaEditor('${t.id}')" style="background:#059669;color:#fff;border:none;font-weight:600">${t.qatiyyaDate?'✏️ تعديل':'+ إضافة تاريخ التسجيل'}</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn bsm" onclick="openQatiyyaEditor('${t.id}')" style="background:#059669;color:#fff;border:none;font-weight:600">${t.qatiyyaDate?'✏️ تعديل':'+ إضافة تاريخ التسجيل'}</button>
+          ${t.rerCorrecting?`<button class="btn bsm" onclick="openCompleteCorrection('${t.id}')" style="background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;font-weight:600">✅ إكمال التصحيح</button>`:`<button class="btn bsm" onclick="openCorrectRegistration('${t.id}')" style="background:#fff;color:#6D28D9;border:1px solid #C4B5FD;font-weight:600">🔧 تصحيح التسجيل</button>`}
+        </div>
       </div>
-    </div>`:''}`;
+    </div>`):''}`;
 
   // Gov refs tab
   renderGovRefsTab(t);
@@ -7712,6 +7836,7 @@ function openTxDetail(id,openTab){
   document.getElementById('dtFooter').innerHTML=`
     <button class="btn bs" onclick="closeModal('mTxDetail')">إغلاق</button>
     ${(isEditorPlus_||canUpdateStatus()) ? `<button class="btn bs bsm" onclick="openAddStep('${t.id}')">⊕ تحديث</button>` : `<button class="btn bs bsm" onclick="openViewerNote('${t.id}')">📝 ملاحظة</button>`}
+    ${(isEditorPlus_&&t.issueCode==='RER'&&!t.rerRejected) ? `<button class="btn bsm" onclick="openRejectRegistration('${t.id}')" style="background:rgba(239,68,68,.08);color:var(--danger);border:1px solid rgba(239,68,68,.25)">⚠️ رفض التسجيل</button>` : ''}
     <button class="btn bs bsm" onclick="startTimer('${t.id}','عمل على ${t.code}')" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none">▶ ابدأ المؤقت</button>
     ${isEditorPlus_ ? `<button class="btn bs bsm" onclick="openGovRefs('${t.id}')">📋 أرقام حكومية</button>` : ''}
     ${canManage() ? `<button class="btn bsm" onclick="lockTransaction('${t.id}')" style="background:${t.locked?'rgba(52,211,153,.12)':'rgba(248,113,113,.1)'};color:${t.locked?'var(--success)':'var(--danger)'};border:1px solid ${t.locked?'rgba(52,211,153,.25)':'rgba(248,113,113,.2)'}">${t.locked?'🔓 فتح القفل':'🔒 قفل'}</button>` : ''}
@@ -7744,7 +7869,13 @@ function renderGovRefsTab(t){
 }
 
 function renderStepsTabDetail(t){
-  const stepsList=t.steps||[];
+  const rawSteps=t.steps||[];
+  // ترتيب حسب الطابع الزمني الرقمي (مع حفظ الفهرس الأصلي _oi للأزرار)
+  const stepsList=rawSteps.map((s,origIdx)=>Object.assign({},s,{_oi:origIdx})).sort((a,b)=>{
+    const ta=a.ts||a.timestamp||0, tb=b.ts||b.timestamp||0;
+    if(ta&&tb) return ta-tb;
+    return a._oi-b._oi;
+  });
   const isManager=currentUser&&currentUser.role==='manager';
   const isEditor=currentUser&&currentUser.role==='editor';
   const isAssignee=currentUser&&isAssigneeOf(t,currentUser.email);
@@ -7772,6 +7903,7 @@ function renderStepsTabDetail(t){
     html+='<p style="text-align:center;color:var(--sub);font-size:12px;padding:20px">لم يتم إضافة خطوات تنفيذ بعد</p>';
   } else {
     stepsList.forEach((s,idx)=>{
+      const oi=s._oi; // الفهرس الأصلي في t.steps (للأزرار)
       const isDone=!!s.completed;
       const stepBg=isDone?'rgba(16,185,129,.04)':'#fff';
       const stepBorder=isDone?'rgba(16,185,129,.25)':'var(--border)';
@@ -7782,13 +7914,13 @@ function renderStepsTabDetail(t){
 
       html+=`<div style="display:flex;gap:12px;padding:14px;background:${stepBg};border:1px solid ${stepBorder};border-radius:10px;transition:all .2s">
         <div style="flex-shrink:0">
-          ${canConfirm?`<button onclick="toggleStepComplete('${t.id}',${idx})" style="width:28px;height:28px;border-radius:50%;background:${checkboxBg};border:2px solid ${checkboxBorder};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all .2s" title="${isDone?'تراجع':'تأكيد الإنجاز'}">${checkmark}</button>`:`<div style="width:28px;height:28px;border-radius:50%;background:${checkboxBg};border:2px solid ${checkboxBorder};display:flex;align-items:center;justify-content:center">${checkmark}</div>`}
+          ${canConfirm?`<button onclick="toggleStepComplete('${t.id}',${oi})" style="width:28px;height:28px;border-radius:50%;background:${checkboxBg};border:2px solid ${checkboxBorder};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all .2s" title="${isDone?'تراجع':'تأكيد الإنجاز'}">${checkmark}</button>`:`<div style="width:28px;height:28px;border-radius:50%;background:${checkboxBg};border:2px solid ${checkboxBorder};display:flex;align-items:center;justify-content:center">${checkmark}</div>`}
         </div>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
             <span style="font-family:'JetBrains Mono';font-size:10px;font-weight:700;background:var(--ind-dim);color:var(--indigo);padding:2px 8px;border-radius:5px">خطوة ${idx+1}</span>
             ${canConfirm?`
-              <select onchange="updateStepStatus('${t.id}',${idx},this.value)" style="font-size:10.5px;padding:2px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;font-family:inherit;font-weight:600;color:${isDone?'#065F46':s.status==='متأخرة'?'#991B1B':'#92400E'};cursor:pointer">
+              <select onchange="updateStepStatus('${t.id}',${oi},this.value)" style="font-size:10.5px;padding:2px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;font-family:inherit;font-weight:600;color:${isDone?'#065F46':s.status==='متأخرة'?'#991B1B':'#92400E'};cursor:pointer">
                 <option value="تحت الإجراء" ${stepStatus==='تحت الإجراء'?'selected':''}>🟡 تحت الإجراء</option>
                 <option value="منجزة" ${stepStatus==='منجزة'?'selected':''}>✅ منجزة</option>
                 <option value="متأخرة" ${stepStatus==='متأخرة'?'selected':''}>🔴 متأخرة</option>
@@ -7797,7 +7929,7 @@ function renderStepsTabDetail(t){
             `:`<span style="font-size:10px;background:${isDone?'rgba(16,185,129,.15)':'rgba(245,158,11,.15)'};color:${isDone?'#065F46':'#92400E'};padding:2px 8px;border-radius:5px;font-weight:700">${stepStatus}</span>`}
           </div>
           <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;${isDone?'text-decoration:line-through;opacity:.7':''}">${s.text}</div>
-          <div style="font-size:10.5px;color:var(--text3);margin-bottom:6px">${s.date||''} ${s.by?'• '+s.by:''}${s.completedBy?' • ✓ '+s.completedBy:''}</div>
+          <div style="font-size:10.5px;color:var(--text3);margin-bottom:6px">🕐 ${fmtDateTime(s.ts||s.timestamp)} ${s.by?'• '+s.by:''}${s.completedBy?' • ✓ '+s.completedBy:''}</div>
           ${s.note?`<p style="font-size:11px;color:var(--text2);margin-bottom:8px;padding:6px 10px;background:rgba(0,0,0,.02);border-radius:6px">${s.note}</p>`:''}
           ${s.attachment?`
             <a href="${s.attachment.url||'#'}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:#fff;text-decoration:none;color:inherit">
@@ -7816,13 +7948,13 @@ function renderStepsTabDetail(t){
               ${s.proofUrl?`
                 <div style="display:flex;gap:6px;align-items:center">
                   <a href="${s.proofUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex:1;font-size:11px;color:var(--indigo);text-decoration:none;direction:ltr;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#fff;padding:6px 10px;border-radius:6px;border:1px solid var(--border)">🔗 ${s.proofName||s.proofUrl}</a>
-                  <button onclick="setStepProof('${t.id}',${idx},null)" style="background:rgba(239,68,68,.1);border:none;border-radius:5px;padding:4px 9px;cursor:pointer;color:var(--danger);font-size:11px">✕</button>
+                  <button onclick="setStepProof('${t.id}',${oi},null)" style="background:rgba(239,68,68,.1);border:none;border-radius:5px;padding:4px 9px;cursor:pointer;color:var(--danger);font-size:11px">✕</button>
                 </div>
               `:`
                 <div style="display:flex;gap:6px">
-                  <input type="text" id="proofName_${idx}" placeholder="اسم الملف" style="flex:1;font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-family:inherit">
-                  <input type="url" id="proofUrl_${idx}" placeholder="https://..." style="flex:2;font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-family:inherit;direction:ltr">
-                  <button onclick="addStepProof('${t.id}',${idx})" style="background:linear-gradient(135deg,var(--indigo),var(--violet));color:#fff;border:none;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap">+ إضافة</button>
+                  <input type="text" id="proofName_${oi}" placeholder="اسم الملف" style="flex:1;font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-family:inherit">
+                  <input type="url" id="proofUrl_${oi}" placeholder="https://..." style="flex:2;font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-family:inherit;direction:ltr">
+                  <button onclick="addStepProof('${t.id}',${oi})" style="background:linear-gradient(135deg,var(--indigo),var(--violet));color:#fff;border:none;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap">+ إضافة</button>
                 </div>
               `}
             </div>
@@ -8122,6 +8254,7 @@ function confirmActivateAssign(){
     type:'update',
     text:note||`تم تفعيل المعاملة وإسنادها إلى ${assigneeNamesStr}`,
     date:now_(),
+    ts:Date.now(),
     by:currentUser.name,
     byEmail:currentUser.email,
     status:'تحت الإجراء'
@@ -8190,7 +8323,7 @@ function getValidityBadge(t){
   // Show both Greg and Hijri if available
   let dateStr=end;
   try{
-    const h=toHijri(new Date(end));
+    const h=hijriStr(new Date(end));
     if(h) dateStr=`${end} (${h}هـ)`;
   }catch(e){}
   return `<div style="display:inline-flex;align-items:center;gap:6px;font-size:10px;color:#64748B;margin-top:3px">
@@ -8203,11 +8336,79 @@ function getValidityBadge(t){
 // ════════════════════════════════════════════════════════════
 // HIJRI DATE INPUT HELPERS
 // ════════════════════════════════════════════════════════════
+// ── حقل تاريخ مزدوج: قائمة منسدلة لاختيار التقويم + تحديث فوري للتقويم الآخر ──
+function makeDualCalendarInput(fieldName,gregValue){
+  let hijriValue='';
+  if(gregValue){try{hijriValue=hijriStr(new Date(gregValue));}catch(e){}}
+  return `<div data-dual="${fieldName}">
+    <div style="display:flex;gap:6px;align-items:stretch">
+      <select id="${fieldName}_cal" onchange="switchDualCal('${fieldName}')" style="flex:0 0 auto;padding:8px 10px;border:1px solid #CBD5E1;border-radius:8px;font-family:inherit;font-size:12px;background:#F8FAFC;color:#334155;cursor:pointer">
+        <option value="g">🌐 ميلادي</option>
+        <option value="h">🌙 هجري</option>
+      </select>
+      <input type="date" class="finp" id="${fieldName}_g" value="${gregValue||''}" oninput="onDualInput('${fieldName}','g')" style="flex:1">
+      <input type="text" class="finp" id="${fieldName}_h" value="${hijriValue}" placeholder="YYYY/MM/DD" oninput="onDualInput('${fieldName}','h')" style="flex:1;display:none;font-family:'JetBrains Mono';direction:ltr;text-align:right">
+    </div>
+    <div id="${fieldName}_mirror" style="font-size:10.5px;color:var(--indigo);margin-top:5px;min-height:14px"></div>
+  </div>`;
+}
+function switchDualCal(fieldName){
+  const cal=document.getElementById(fieldName+'_cal')?.value;
+  const gEl=document.getElementById(fieldName+'_g');
+  const hEl=document.getElementById(fieldName+'_h');
+  if(!gEl||!hEl) return;
+  if(cal==='h'){gEl.style.display='none';hEl.style.display='block';}
+  else{gEl.style.display='block';hEl.style.display='none';}
+  updateDualMirror(fieldName);
+}
+function onDualInput(fieldName,fromType){
+  const gEl=document.getElementById(fieldName+'_g');
+  const hEl=document.getElementById(fieldName+'_h');
+  if(!gEl||!hEl) return;
+  if(fromType==='g'){
+    // ميلادي ← يحدّث هجري
+    if(gEl.value){try{const h=hijriStr(new Date(gEl.value));if(h)hEl.value=h;}catch(e){}}
+    else hEl.value='';
+  } else {
+    // هجري ← يحدّث ميلادي
+    if(hEl.value){
+      try{
+        const parts=hEl.value.split(/[\/\-\.]/).map(p=>parseInt(p.trim())).filter(n=>!isNaN(n));
+        if(parts.length===3){
+          const [y,m,d]=parts;
+          if(y>=1300&&y<=1500){
+            const gDate=fromHijri(y,m,d);
+            if(gDate&&!isNaN(gDate.getTime())) gEl.value=gDate.toISOString().split('T')[0];
+          }
+        }
+      }catch(e){}
+    } else gEl.value='';
+  }
+  updateDualMirror(fieldName);
+}
+function updateDualMirror(fieldName){
+  const cal=document.getElementById(fieldName+'_cal')?.value;
+  const gEl=document.getElementById(fieldName+'_g');
+  const hEl=document.getElementById(fieldName+'_h');
+  const mirror=document.getElementById(fieldName+'_mirror');
+  if(!mirror||!gEl||!hEl) return;
+  if(cal==='h'){
+    // المعروض هجري، المرآة تُظهر الميلادي
+    if(gEl.value){
+      try{const d=new Date(gEl.value);const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];mirror.innerHTML=`🌐 الميلادي: <b style="font-family:'JetBrains Mono'">${d.getDate()} ${m[d.getMonth()]} ${d.getFullYear()}</b>`;}catch(e){mirror.innerHTML='';}
+    } else mirror.innerHTML='';
+  } else {
+    // المعروض ميلادي، المرآة تُظهر الهجري
+    if(hEl.value) mirror.innerHTML=`🌙 الهجري: <b style="font-family:'JetBrains Mono'">${hEl.value} هـ</b>`;
+    else mirror.innerHTML='';
+  }
+}
+
 function makeHijriInputs(fieldName,gregDateValue){
   // Returns HTML with two inputs (Greg + Hijri) and a convert button
   let hijriValue='';
   if(gregDateValue){
-    try{hijriValue=toHijri(new Date(gregDateValue));}catch(e){}
+    try{hijriValue=hijriStr(new Date(gregDateValue));}catch(e){}
   }
   return `<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end">
     <div>
@@ -8230,7 +8431,7 @@ function syncHijri(fieldName,fromType){
     // Convert Greg → Hijri
     if(gEl.value){
       try{
-        const h=toHijri(new Date(gEl.value));
+        const h=hijriStr(new Date(gEl.value));
         if(h) hEl.value=h;
       }catch(e){}
     } else hEl.value='';
@@ -8986,7 +9187,7 @@ function buildTxTimelineHtml(txId){
     const d=new Date(ts);
     return {
       top:`${String(d.getDate()).padStart(2,'0')} ${monthShort[d.getMonth()]}`,
-      bottom:`${String(d.getFullYear()).slice(-2)} • ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+      bottom:`${d.getFullYear()} • ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
     };
   };
 
@@ -9182,6 +9383,7 @@ function confirmSmartRenewal(){
       type:'update',
       text:`تم إنشاء التجديد رقم ${newRenewalNumber} (من ${oldTx.code})`,
       date:now_(),
+      ts:Date.now(),
       by:currentUser.name,
       byEmail:currentUser.email,
       status:'تحت الإجراء'
@@ -9486,7 +9688,7 @@ function applyStatusChange(id,st){
   const t=transactions.find(x=>x.id===id);
   if(!t) return;
   t.status=st;
-  t.steps.push({text:'تغيير الحالة: '+st,date:now_(),status:st,by:currentUser.name});
+  t.steps.push({text:'تغيير الحالة: '+st,date:now_(),ts:Date.now(),status:st,by:currentUser.name});
   addAudit('تغيير حالة',`${t.code} → ${st}`,id);
   ss('v4_tx',transactions);
   markTxModified(id);
@@ -9568,7 +9770,7 @@ function saveGovRefs(){
   const t=transactions.find(x=>x.id===currentTxId);
   if(!t) return;
   t.govRefs=govRefsEdit.filter(r=>r.num.trim());
-  t.steps.push({text:`تم تحديث الأرقام الحكومية (${t.govRefs.length} رقم)`,date:now_(),by:currentUser.name});
+  t.steps.push({text:`تم تحديث الأرقام الحكومية (${t.govRefs.length} رقم)`,date:now_(),ts:Date.now(),by:currentUser.name});
   ss('v4_tx',transactions);
   closeModal('mGovRefs');
   toast('تم حفظ الأرقام الحكومية','ok');
@@ -9599,6 +9801,11 @@ function openAddStep(id){
   const sName=document.getElementById('stepAttName');if(sName)sName.value='';
   const sUrl=document.getElementById('stepAttUrl');if(sUrl)sUrl.value='';
   const sGov=document.getElementById('stepGovNum');if(sGov)sGov.value='';
+  // حقل التاريخ والوقت الموحّد (فارغ = تلقائي)
+  const sdw=document.getElementById('stepDateWrap');
+  if(sdw&&typeof makeDateTimeField==='function'){
+    sdw.innerHTML=makeDateTimeField('stepDate',{withTime:true});
+  }
   setTimeout(()=>{
     const el=document.getElementById('stepNote');
     if(el) attachVoiceButton(el);
@@ -9615,12 +9822,15 @@ function saveStep(){
   const oldAssignees=getAssignees(t);
   const reasgnChanged=JSON.stringify([...newAssignees].sort())!==JSON.stringify([...oldAssignees].sort());
   const pendingReason=document.getElementById('pendingReason')?.value.trim()||'';
+  // التاريخ: يدوي إن أُدخل، وإلا تلقائي من النظام
+  const manualTs=(typeof readDateTimeField==='function')?readDateTimeField('stepDate'):null;
+  const stepTs=manualTs||Date.now();
   // Type='update' = an information update, NOT a workflow milestone
   const step={
     type:'update',
     text:note,
     date:now_(),
-    ts:Date.now(),
+    ts:stepTs,
     by:currentUser.name,
     byEmail:currentUser.email,
     note:'',
@@ -9692,7 +9902,7 @@ function confirmClose(){
   if(!t) return;
   t.closedTask=true;t.closedAt=Date.now();
   t.closeNote=document.getElementById('closeNote').value;
-  t.steps.push({text:'إغلاق المهمة الموكلة',date:now_(),by:currentUser.name,note:t.closeNote,status:'منجزة'});
+  t.steps.push({text:'إغلاق المهمة الموكلة',date:now_(),ts:Date.now(),by:currentUser.name,note:t.closeNote,status:'منجزة'});
   ss('v4_tx',transactions);
   closeModal('mCloseTask');snd('done');toast('✅ تم إغلاق المهمة','ok');
   openTxDetail(closeTaskId);renderDash();
@@ -9729,7 +9939,7 @@ function approveRequest(){
   if(!t) return;
   t.pendingApproval=false;t.status='تحت الإجراء';
   const note=document.getElementById('approvalNote').value;
-  t.steps.push({text:'تمت الموافقة على المعاملة',date:now_(),by:currentUser.name,note,status:'تحت الإجراء'});
+  t.steps.push({text:'تمت الموافقة على المعاملة',date:now_(),ts:Date.now(),by:currentUser.name,note,status:'تحت الإجراء'});
   ss('v4_tx',transactions);
   closeModal('mApproval');snd('done');toast('✅ تمت الموافقة','ok');renderDash();
 }
@@ -9738,7 +9948,7 @@ function rejectRequest(){
   if(!t) return;
   const note=document.getElementById('approvalNote').value;
   t.pendingApproval=false;t.status='موقوفة';
-  t.steps.push({text:'تم رفض الطلب',date:now_(),by:currentUser.name,note,status:'موقوفة'});
+  t.steps.push({text:'تم رفض الطلب',date:now_(),ts:Date.now(),by:currentUser.name,note,status:'موقوفة'});
   ss('v4_tx',transactions);
   closeModal('mApproval');toast('تم رفض الطلب','wn');renderDash();
 }
@@ -10623,31 +10833,17 @@ function openQuickAddDoc(){
     };
   }
 
-  // Populate Hijri inputs in Quick Doc
-  if(typeof makeHijriInputs==='function'){
+  // Populate unified datetime inputs in Quick Doc (قوائم هجرية منسدلة، بدون وقت للصلاحية)
+  if(typeof makeDateTimeField==='function'){
     const swr=document.getElementById('qdStartWrap');
     const ewr=document.getElementById('qdEndWrap');
     if(swr){
-      swr.innerHTML=makeHijriInputs('qdStartInput','');
-      setTimeout(()=>{
-        const gEl=document.getElementById('qdStartInput_g');
-        if(gEl){
-          const sync=()=>{const h=document.getElementById('qdStart');if(h) h.value=gEl.value;};
-          gEl.addEventListener('change',sync);
-          gEl.addEventListener('input',sync);
-        }
-      },80);
+      swr.innerHTML=makeDateTimeField('qdStartInput',{withTime:false});
+      setTimeout(()=>updateDtMirrorSafe('qdStartInput'),80);
     }
     if(ewr){
-      ewr.innerHTML=makeHijriInputs('qdEndInput','');
-      setTimeout(()=>{
-        const gEl=document.getElementById('qdEndInput_g');
-        if(gEl){
-          const sync=()=>{const h=document.getElementById('qdEnd');if(h) h.value=gEl.value;};
-          gEl.addEventListener('change',sync);
-          gEl.addEventListener('input',sync);
-        }
-      },80);
+      ewr.innerHTML=makeDateTimeField('qdEndInput',{withTime:false});
+      setTimeout(()=>updateDtMirrorSafe('qdEndInput'),80);
     }
   }
 
@@ -10687,8 +10883,9 @@ function saveQuickDoc(){
   const name=document.getElementById('qdName').value.trim();
   const type=document.getElementById('qdType').value.trim();
   const num=document.getElementById('qdNum').value.trim();
-  const start=document.getElementById('qdStart').value;
-  const end=document.getElementById('qdEnd').value;
+  // قراءة من المصدر الموحّد (_g) — يتحدّث تلقائياً من القوائم الهجرية أيضاً
+  const start=(typeof readDateOnlyField==='function'?readDateOnlyField('qdStartInput'):'')||document.getElementById('qdStart')?.value||'';
+  const end=(typeof readDateOnlyField==='function'?readDateOnlyField('qdEndInput'):'')||document.getElementById('qdEnd')?.value||'';
   const projName=document.getElementById('qdProj').value.trim();
   const agency=document.getElementById('qdAgency').value.trim();
   const linkMode=document.querySelector('input[name="qdLinkMode"]:checked')?.value||'none';
@@ -11209,141 +11406,280 @@ function renderRealEstate(){
   if(!summaryEl||!colsEl) return;
 
   const baseTx=isLiaison()?filterTransactionsForLiaison(transactions):transactions;
-  let rerTx=baseTx.filter(t=>t.issueCode==='RER'&&t.qatiyyaDate&&!t.hidden);
+  // كل صكوك RER غير المخفية (سواء سُجّلت أو رُفضت)
+  let rerAll=baseTx.filter(t=>t.issueCode==='RER'&&!t.hidden);
 
   const q=(document.getElementById('reSearch')?.value||'').trim().toLowerCase();
   if(q){
-    rerTx=rerTx.filter(t=>{
+    rerAll=rerAll.filter(t=>{
       const projName=(projects.find(p=>p.code===t.projCode)?.name||t.proj||'').toLowerCase();
       return (t.propertyNumber||'').toLowerCase().includes(q)||projName.includes(q)||(t.code||'').toLowerCase().includes(q)||(t.name||'').toLowerCase().includes(q);
     });
   }
 
   const today=new Date();today.setHours(0,0,0,0);
-  const achieved=[],imminent=[],registered=[];
-  rerTx.forEach(t=>{
-    const Qd=new Date(t.qatiyyaDate);Qd.setHours(0,0,0,0);
-    const daysToQ=Math.round((Qd-today)/86400000);
+  const achieved=[],imminent=[],registered=[],rejected=[];
+  rerAll.forEach(t=>{
     const projName=projects.find(p=>p.code===t.projCode)?.name||t.proj||t.projCode||'—';
-    const item={t,Qd,daysToQ,projName};
-    if(daysToQ<=0) achieved.push(item);
-    else if(daysToQ<=30) imminent.push(item);
-    else registered.push(item);
+    // مرفوض التسجيل
+    if(t.rerRejected){
+      rejected.push({t,projName});
+      return;
+    }
+    // مسجّل (له تاريخ قطعية)
+    if(t.qatiyyaDate){
+      const Qd=new Date(t.qatiyyaDate);Qd.setHours(0,0,0,0);
+      const daysToQ=Math.round((Qd-today)/86400000);
+      const item={t,Qd,daysToQ,projName};
+      if(daysToQ<=0) achieved.push(item);
+      else if(daysToQ<=30) imminent.push(item);
+      else registered.push(item);
+    }
   });
   registered.sort((a,b)=>a.daysToQ-b.daysToQ);
   imminent.sort((a,b)=>a.daysToQ-b.daysToQ);
   achieved.sort((a,b)=>b.Qd-a.Qd);
 
-  // أنماط زجاجية فاتحة مشتركة
-  const GLASS='background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.9);border-radius:20px;backdrop-filter:blur(20px);box-shadow:0 8px 32px rgba(15,118,110,.08),0 2px 8px rgba(0,0,0,.04),inset 0 1px 0 rgba(255,255,255,.9)';
+  // أنماط زجاجية فاتحة
+  const GLASS='background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.9);border-radius:20px;backdrop-filter:blur(20px);box-shadow:0 8px 32px rgba(15,118,110,.08),inset 0 1px 0 rgba(255,255,255,.9)';
   const GLASST='background:linear-gradient(145deg,rgba(20,184,166,.08),rgba(255,255,255,.6));border:1px solid rgba(20,184,166,.2);border-radius:16px;backdrop-filter:blur(16px);box-shadow:0 4px 20px rgba(20,184,166,.1),inset 0 1px 0 rgba(255,255,255,.8)';
 
-  // بطاقات الملخص
-  const sumBox=(icon,num,label,accent,glowRgba,fill)=>`<div style="${GLASS};padding:22px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:0;right:0;width:80px;height:80px;background:radial-gradient(circle at top right,${glowRgba},transparent 70%)"></div>
-    <div style="display:flex;justify-content:space-between;align-items:start;position:relative">
-      <div><div style="font-size:13px;color:#64748b;font-weight:600">${label}</div><div style="font-size:34px;font-weight:900;color:${accent};margin-top:6px;font-family:'JetBrains Mono'">${num}</div></div>
-      <div style="width:44px;height:44px;border-radius:12px;background:${glowRgba};display:flex;align-items:center;justify-content:center;font-size:20px">${icon}</div>
-    </div>
-    <div style="width:100%;height:3px;background:rgba(15,118,110,.08);border-radius:2px;margin-top:14px;overflow:hidden"><div style="width:${fill};height:100%;background:linear-gradient(90deg,${accent},${accent})"></div></div>
+  // ─── الملخص العلوي: 4 بطاقات (شاملة رفض التسجيل) ───
+  const sumBox=(icon,num,label,accent,glow,extra)=>`<div style="${GLASS};padding:18px;text-align:center;${extra||''}">
+    <div style="width:44px;height:44px;border-radius:50%;background:${glow};display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 8px">${icon}</div>
+    <div style="font-size:26px;font-weight:900;color:${accent};font-family:'JetBrains Mono'">${num}</div>
+    <div style="font-size:11px;color:#64748b;font-weight:600">${label}</div>
   </div>`;
+  summaryEl.style.gridTemplateColumns='repeat(4,1fr)';
   summaryEl.innerHTML=
-    sumBox('📋',registered.length,'تم التسجيل','#0F766E','rgba(20,184,166,.12)','40%')+
-    sumBox('⏰',imminent.length,'قطعية وشيكة','#D97706','rgba(245,158,11,.12)','75%')+
-    sumBox('🏆',achieved.length,'اكتسب القطعية','#059669','rgba(16,185,129,.15)','100%');
+    sumBox('📋',registered.length,'تم التسجيل','#0F766E','rgba(20,184,166,.12)')+
+    sumBox('⏰',imminent.length,'قطعية وشيكة','#D97706','rgba(245,158,11,.12)')+
+    sumBox('🏆',achieved.length,'اكتسب القطعية','#059669','rgba(16,185,129,.15)')+
+    sumBox('⚠️',rejected.length,'رفض التسجيل','#dc2626','rgba(239,68,68,.12)','border:2px solid rgba(239,68,68,.25)');
 
-  // دائرة التقدّم
-  const ring=(daysToQ,color,track)=>{
-    const elapsed=365-daysToQ,pct=Math.max(0,Math.min(1,elapsed/365));
-    const r=25,circ=2*Math.PI*r,off=circ*(1-pct);
-    return `<svg width="60" height="60" viewBox="0 0 60 60" style="flex-shrink:0">
-      <circle cx="30" cy="30" r="${r}" fill="none" stroke="${track}" stroke-width="5"/>
-      <circle cx="30" cy="30" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${circ.toFixed(0)}" stroke-dashoffset="${off.toFixed(0)}" transform="rotate(-90 30 30)"/>
-      <text x="30" y="27" text-anchor="middle" font-size="${daysToQ>99?'15':'16'}" font-weight="800" fill="${color}" font-family="JetBrains Mono">${daysToQ}</text>
-      <text x="30" y="40" text-anchor="middle" font-size="8" fill="#94a3b8">يوم</text>
-    </svg>`;
-  };
-  // بطاقة صك مسجّل
-  const deedCard=(item)=>{
+  // ─── البطاقات البانورامية الكبيرة (كل الصكوك) ───
+  const reFmtFull=(d)=>{const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return `${d.getDate()} ${m[d.getMonth()]} ${d.getFullYear()}`;};
+  // بانورامية مسجّل/وشيك
+  const panelActive=(item,isImm)=>{
     const {t,Qd,daysToQ,projName}=item;
-    const propHtml=t.propertyNumber?`<div style="margin-top:8px;background:rgba(20,184,166,.12);color:#0F766E;font-size:11px;font-weight:700;padding:4px 11px;border-radius:7px;display:inline-block;font-family:'JetBrains Mono';border:1px solid rgba(20,184,166,.25)">🏠 ${t.propertyNumber}</div>`:'';
-    return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;${GLASST};padding:16px;display:flex;align-items:center;gap:16px">
-      ${ring(daysToQ,'#14B8A6','rgba(15,118,110,.1)')}
+    const accent=isImm?'#d97706':'#0f766e', accentBg=isImm?'#F59E0B':'#14B8A6';
+    const grad=isImm?'linear-gradient(135deg,#F59E0B,#d97706)':'linear-gradient(135deg,#14B8A6,#0f766e)';
+    const icon=isImm?'⏰':'🏛️';
+    const badge=isImm?'<span style="font-size:10px;background:rgba(245,158,11,.15);color:#b45309;padding:3px 10px;border-radius:20px;font-weight:700">⏰ وشيكة</span>':'<span style="font-size:10px;background:rgba(20,184,166,.12);color:#0f766e;padding:3px 10px;border-radius:20px;font-weight:700">✓ مُسجّل</span>';
+    const corrBadge=t.rerCorrecting?'<span style="font-size:10px;background:rgba(124,58,237,.12);color:#6D28D9;padding:3px 10px;border-radius:20px;font-weight:700">🔧 قيد التصحيح</span>':'';
+    const elapsed=365-daysToQ,pct=Math.max(1,Math.min(100,(elapsed/365)*100));
+    const trackBg=isImm?'#fef3c7':'#e2e8f0';
+    const propStr=t.propertyNumber?` · 🏠 ${t.propertyNumber}`:'';
+    const border=isImm?'border:2px solid rgba(245,158,11,.3)':'';
+    return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;${GLASS};padding:20px;display:flex;align-items:center;gap:20px;${border}">
+      <div style="width:64px;height:64px;border-radius:18px;background:${grad};display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">${icon}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:800;color:#0f2942;font-size:15px">${projName}</div>
-        <div style="font-size:11px;color:#94a3b8;font-family:'JetBrains Mono';margin-top:3px">${t.code}</div>
-        ${propHtml}
-        <div style="font-size:11px;color:#64748b;margin-top:7px">القطعية: <span style="color:#0F766E;font-weight:700">${reFmtAr(Qd)}</span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:16px;font-weight:800;color:#1e293b">${projName}</span>${badge}${corrBadge}<span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono'">${t.code}${propStr}</span></div>
+        <div style="display:flex;align-items:center;gap:12px"><div style="flex:1;height:8px;background:${trackBg};border-radius:4px;overflow:hidden"><div style="width:${pct.toFixed(0)}%;height:100%;background:${grad}"></div></div><span style="font-size:11px;color:${accent};font-weight:700;white-space:nowrap">القطعية: ${reFmtFull(Qd)}</span></div>
       </div>
+      <div style="text-align:center;flex-shrink:0"><div style="font-size:28px;font-weight:900;color:${accent};font-family:'JetBrains Mono'">${daysToQ}</div><div style="font-size:9px;color:#94a3b8">يوم متبقٍ</div></div>
     </div>`;
   };
-
-  // ── قسم تم التسجيل (كامل العرض) ──
-  const regShow=registered.slice(0,6);
-  const regMore=registered.length-regShow.length;
-  const registeredSection=`<div style="${GLASS};padding:22px;margin-bottom:16px">
-    <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
-      <div style="width:9px;height:9px;border-radius:50%;background:#14B8A6;box-shadow:0 0 8px rgba(20,184,166,.5)"></div>
-      <span style="font-size:16px;font-weight:800;color:#0f2942">تم التسجيل</span>
-      <span style="font-size:12px;color:#0F766E;background:rgba(20,184,166,.1);padding:2px 10px;border-radius:20px;margin-right:4px">${registered.length} ${registered.length===1?'صك':'صكوك'}</span>
-    </div>
-    <div style="font-size:12px;color:#64748b;margin-bottom:16px">صكوك سُجّلت بنجاح وتسير نحو اكتساب القطعية</div>
-    ${regShow.length?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">${regShow.map(deedCard).join('')}</div>
-    ${regMore>0?`<div style="text-align:center;padding:10px;font-size:11px;color:#0F766E;font-weight:600;margin-top:4px">+ ${regMore} صك آخر</div>`:''}`:'<div style="text-align:center;padding:30px;font-size:12px;color:#94a3b8">لا صكوك مسجّلة بعد</div>'}
-  </div>`;
-
-  // ── صف: وشيك + اكتسب + (مرفوض لاحقاً) ──
-  // عمود وشيك
-  const immCard=(item)=>{
-    const {t,Qd,daysToQ,projName}=item;
-    const r=19,circ=2*Math.PI*r,elapsed=365-daysToQ,pct=Math.max(0,Math.min(1,elapsed/365)),off=circ*(1-pct);
-    return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;background:linear-gradient(145deg,rgba(245,158,11,.1),rgba(255,255,255,.6));border:1px solid rgba(245,158,11,.25);border-radius:14px;padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:9px">
-      <svg width="48" height="48" viewBox="0 0 48 48" style="flex-shrink:0"><circle cx="24" cy="24" r="${r}" fill="none" stroke="rgba(217,119,6,.1)" stroke-width="4.5"/><circle cx="24" cy="24" r="${r}" fill="none" stroke="#F59E0B" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="${circ.toFixed(0)}" stroke-dashoffset="${off.toFixed(0)}" transform="rotate(-90 24 24)"/><text x="24" y="22" text-anchor="middle" font-size="13" font-weight="800" fill="#D97706" font-family="JetBrains Mono">${daysToQ}</text><text x="24" y="32" text-anchor="middle" font-size="6.5" fill="#94a3b8">يوم</text></svg>
-      <div style="flex:1;min-width:0"><div style="font-weight:800;color:#0f2942;font-size:12px">${projName}</div><div style="font-size:9px;color:#94a3b8;font-family:'JetBrains Mono';margin-top:2px">${t.code}</div><div style="font-size:9px;color:#D97706;margin-top:4px;font-weight:600">${reFmtAr(Qd)}</div></div>
-    </div>`;
-  };
-  const immShow=imminent.slice(0,5);
-  const immMore=imminent.length-immShow.length;
-  const imminentCol=`<div style="${GLASS};padding:18px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="width:8px;height:8px;border-radius:50%;background:#F59E0B;box-shadow:0 0 6px rgba(245,158,11,.5)"></div><span style="font-size:14px;font-weight:800;color:#0f2942">قطعية وشيكة (${imminent.length})</span></div>
-    ${immShow.length?immShow.map(immCard).join(''):'<div style="text-align:center;padding:24px;font-size:11px;color:#94a3b8">لا صكوك وشيكة</div>'}
-    ${immMore>0?`<div style="text-align:center;padding:6px;font-size:10px;color:#D97706;font-weight:600">+ ${immMore} صك</div>`:''}
-  </div>`;
-
-  // عمود اكتسب القطعية
-  const achShow=achieved.slice(0,5);
-  const achMore=achieved.length-achShow.length;
-  const achRow=(item)=>{
+  // بانورامية مكتمل
+  const panelDone=(item)=>{
     const {t,Qd,projName}=item;
-    return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;${GLASST};padding:9px 12px;display:flex;align-items:center;gap:8px;border-color:rgba(16,185,129,.2);margin-bottom:7px">
-      <span style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#34D399,#10B981);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">🏆</span>
-      <div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:700;color:#0f2942;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${projName}</div>${t.propertyNumber?`<div style="font-size:8px;color:#94a3b8;font-family:'JetBrains Mono'">🏠 ${t.propertyNumber}</div>`:''}</div>
-      <span style="font-size:9px;color:#059669;font-family:'JetBrains Mono';font-weight:700">${Qd.getFullYear()}</span>
+    const propStr=t.propertyNumber?` · 🏠 ${t.propertyNumber}`:'';
+    return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;${GLASS};padding:20px;display:flex;align-items:center;gap:20px;background:linear-gradient(135deg,rgba(16,185,129,.08),rgba(255,255,255,.7))">
+      <div style="width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#34D399,#10B981);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">🏆</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:16px;font-weight:800;color:#1e293b">${projName}</span><span style="font-size:10px;background:rgba(16,185,129,.15);color:#047857;padding:3px 10px;border-radius:20px;font-weight:700">🏆 اكتسب القطعية</span><span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono'">${t.code}${propStr}</span></div>
+        <div style="font-size:11px;color:#047857;font-weight:600">✅ اكتملت القطعية بتاريخ ${reFmtFull(Qd)}</div>
+      </div>
+      <div style="text-align:center;flex-shrink:0"><div style="font-size:24px">✓</div><div style="font-size:9px;color:#047857;font-weight:700">مكتمل</div></div>
     </div>`;
   };
-  const achievedCol=`<div style="${GLASS};padding:18px;border-color:rgba(16,185,129,.25)">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="width:8px;height:8px;border-radius:50%;background:#10B981;box-shadow:0 0 6px rgba(16,185,129,.5)"></div><span style="font-size:14px;font-weight:800;color:#0f2942">اكتسب القطعية (${achieved.length})</span></div>
-    ${achieved.length?`<div style="background:linear-gradient(145deg,rgba(16,185,129,.12),rgba(255,255,255,.6));border:1px solid rgba(16,185,129,.25);border-radius:14px;padding:16px;text-align:center;margin-bottom:10px">
-      <div style="font-size:28px">🏆</div>
-      <div style="font-size:13px;font-weight:800;color:#059669;margin-top:5px">${achieved.length} صك مكتمل</div>
-    </div>${achShow.map(achRow).join('')}
-    ${achMore>0?`<div style="text-align:center;padding:6px;font-size:10px;color:#059669;font-weight:600">+ ${achMore} صك آخر</div>`:''}`:'<div style="background:linear-gradient(145deg,rgba(16,185,129,.06),rgba(255,255,255,.6));border:1px solid rgba(16,185,129,.15);border-radius:14px;padding:24px;text-align:center"><div style="font-size:26px;opacity:.4">🏆</div><div style="font-size:11px;color:#94a3b8;margin-top:8px">ستظهر هنا الصكوك المكتملة</div></div>'}
-  </div>`;
+  // بانورامية مرفوض
+  const panelRejected=(item)=>{
+    const {t,projName}=item;
+    const propStr=t.propertyNumber?` · 🏠 ${t.propertyNumber}`:'';
+    const reason=t.rejectReason||'غير محدد';
+    const rd=t.rejectDate?reFmtFull(new Date(t.rejectDate)):'—';
+    return `<div style="${GLASS};padding:20px;display:flex;align-items:center;gap:20px;background:linear-gradient(135deg,rgba(239,68,68,.06),rgba(255,255,255,.7));border:2px solid rgba(239,68,68,.25)">
+      <div onclick="openTxDetail('${t.id}')" style="cursor:pointer;width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#f87171,#dc2626);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">⚠️</div>
+      <div onclick="openTxDetail('${t.id}')" style="cursor:pointer;flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:16px;font-weight:800;color:#1e293b">${projName}</span><span style="font-size:10px;background:rgba(239,68,68,.12);color:#dc2626;padding:3px 10px;border-radius:20px;font-weight:700">⚠️ مرفوض التسجيل</span><span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono'">${t.code}${propStr}</span></div>
+        <div style="font-size:11px;color:#dc2626;font-weight:600;margin-bottom:4px">✕ سبب الرفض: ${reason}</div>
+        <div style="font-size:10px;color:#94a3b8">رُفض بتاريخ: ${rd} — يتطلب المعالجة لإعادة التقديم</div>
+      </div>
+      <button onclick="event.stopPropagation();openReprocessRejection('${t.id}')" style="background:linear-gradient(135deg,#0F766E,#14B8A6);border:none;border-radius:10px;padding:10px 16px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit;flex-shrink:0;box-shadow:0 4px 14px rgba(20,184,166,.25);white-space:nowrap">🔄 معالجة وإعادة تقديم</button>
+    </div>`;
+  };
 
-  // عمود فارغ ثالث (placeholder للمرفوض مستقبلاً) — نملأه بعمود معلوماتي
+  // ترتيب البطاقات البانورامية: وشيك أولاً (الأهم) ← مسجّل ← مرفوض ← مكتمل
+  let panelsHtml='';
+  imminent.forEach(it=>panelsHtml+=panelActive(it,true));
+  registered.forEach(it=>panelsHtml+=panelActive(it,false));
+  rejected.forEach(it=>panelsHtml+=panelRejected(it));
+  achieved.forEach(it=>panelsHtml+=panelDone(it));
+  if(!panelsHtml) panelsHtml=`<div style="${GLASS};padding:40px;text-align:center;color:#94a3b8;font-size:13px">لا توجد صكوك في السجل العقاري بعد</div>`;
+
+  const panelsSection=`<div style="font-size:13px;font-weight:800;color:#475569;margin:24px 4px 12px;display:flex;align-items:center;gap:8px"><span style="width:24px;height:2px;background:#0F766E"></span>كل الصكوك — عرض تفصيلي</div>
+  <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:18px">${panelsHtml}</div>`;
+
+  // ─── الصف السفلي: وشيك + اكتسب + ملخص (يبقى) ───
+  const immShort=imminent.slice(0,4).map(it=>`<div onclick="openTxDetail('${it.t.id}')" style="cursor:pointer;${GLASST};padding:10px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;border-color:rgba(245,158,11,.2)"><span style="font-size:11px;font-weight:700;color:#1e293b">${it.projName}</span><span style="font-size:13px;font-weight:800;color:#b45309;font-family:'JetBrains Mono'">${it.daysToQ} يوم</span></div>`).join('');
+  const imminentCol=`<div style="${GLASS};padding:18px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span style="width:9px;height:9px;border-radius:50%;background:#F59E0B"></span><span style="font-size:14px;font-weight:800;color:#b45309">قطعية وشيكة (${imminent.length})</span></div>
+    ${immShort||'<div style="text-align:center;padding:18px;font-size:11px;color:#94a3b8">لا صكوك وشيكة</div>'}
+  </div>`;
+  const achShort=achieved.slice(0,4).map(it=>`<div onclick="openTxDetail('${it.t.id}')" style="cursor:pointer;${GLASST};padding:9px 12px;display:flex;align-items:center;gap:8px;border-color:rgba(16,185,129,.2);margin-bottom:7px"><span style="width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#34D399,#10B981);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">🏆</span><div style="flex:1;font-size:11px;font-weight:700;color:#1e293b">${it.projName}</div><span style="font-size:9px;color:#059669;font-family:'JetBrains Mono';font-weight:700">${it.Qd.getFullYear()}</span></div>`).join('');
+  const achievedCol=`<div style="${GLASS};padding:18px;border-color:rgba(16,185,129,.25)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span style="width:9px;height:9px;border-radius:50%;background:#10B981"></span><span style="font-size:14px;font-weight:800;color:#047857">اكتسب القطعية (${achieved.length})</span></div>
+    ${achShort||'<div style="text-align:center;padding:18px;font-size:11px;color:#94a3b8">لا صكوك مكتملة بعد</div>'}
+  </div>`;
+  const totalCount=registered.length+imminent.length+achieved.length+rejected.length;
   const infoCol=`<div style="${GLASS};padding:18px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="width:8px;height:8px;border-radius:50%;background:#0F766E;box-shadow:0 0 6px rgba(15,118,110,.4)"></div><span style="font-size:14px;font-weight:800;color:#0f2942">ملخص السجل</span></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span style="width:9px;height:9px;border-radius:50%;background:#0F766E"></span><span style="font-size:14px;font-weight:800;color:#0f766e">ملخص السجل</span></div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <div style="${GLASST};padding:12px 14px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;color:#64748b;font-weight:600">إجمالي الصكوك</span><span style="font-size:16px;font-weight:800;color:#0F766E;font-family:'JetBrains Mono'">${rerTx.length}</span></div>
-      <div style="${GLASST};padding:12px 14px;display:flex;justify-content:space-between;align-items:center;border-color:rgba(16,185,129,.2)"><span style="font-size:11px;color:#64748b;font-weight:600">نسبة الاكتساب</span><span style="font-size:16px;font-weight:800;color:#059669;font-family:'JetBrains Mono'">${rerTx.length?Math.round(achieved.length/rerTx.length*100):0}%</span></div>
-      <div style="${GLASST};padding:12px 14px;display:flex;justify-content:space-between;align-items:center;border-color:rgba(245,158,11,.2)"><span style="font-size:11px;color:#64748b;font-weight:600">تحتاج متابعة</span><span style="font-size:16px;font-weight:800;color:#D97706;font-family:'JetBrains Mono'">${imminent.length}</span></div>
+      <div style="${GLASST};padding:12px 14px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;color:#64748b;font-weight:600">إجمالي الصكوك</span><span style="font-size:16px;font-weight:800;color:#0F766E;font-family:'JetBrains Mono'">${totalCount}</span></div>
+      <div style="${GLASST};padding:12px 14px;display:flex;justify-content:space-between;align-items:center;border-color:rgba(16,185,129,.2)"><span style="font-size:11px;color:#64748b;font-weight:600">نسبة الاكتساب</span><span style="font-size:16px;font-weight:800;color:#059669;font-family:'JetBrains Mono'">${totalCount?Math.round(achieved.length/totalCount*100):0}%</span></div>
+      <div style="${GLASST};padding:12px 14px;display:flex;justify-content:space-between;align-items:center;border-color:rgba(239,68,68,.2)"><span style="font-size:11px;color:#64748b;font-weight:600">مرفوض التسجيل</span><span style="font-size:16px;font-weight:800;color:#dc2626;font-family:'JetBrains Mono'">${rejected.length}</span></div>
     </div>
   </div>`;
-
   const bottomRow=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">${imminentCol}${achievedCol}${infoCol}</div>`;
 
   colsEl.style.display='block';
-  colsEl.innerHTML=registeredSection+bottomRow;
+  colsEl.innerHTML=bottomRow+panelsSection;
+}
+
+// ════════════════════════════════════════════════════════════
+// رفض التسجيل والمعالجة (Registration Rejection & Reprocessing)
+// ════════════════════════════════════════════════════════════
+let rejectionTxId=null;
+// فتح نافذة تسجيل رفض
+function openRejectRegistration(txId){
+  const t=transactions.find(x=>x.id===txId);
+  if(!t) return;
+  rejectionTxId=txId;
+  const reasonEl=document.getElementById('rejReason');if(reasonEl)reasonEl.value='';
+  const dw=document.getElementById('rejDateWrap');
+  if(dw&&typeof makeDateTimeField==='function') dw.innerHTML=makeDateTimeField('rejDate',{withTime:false});
+  openModal('mRejectReg');
+}
+// حفظ الرفض
+function saveRejectRegistration(){
+  const t=transactions.find(x=>x.id===rejectionTxId);
+  if(!t) return;
+  const reason=document.getElementById('rejReason')?.value.trim()||'';
+  if(!reason){toast('يرجى إدخال سبب الرفض','er');return;}
+  const manualTs=(typeof readDateTimeField==='function')?readDateTimeField('rejDate'):null;
+  const rejTs=manualTs||Date.now();
+  t.rerRejected=true;
+  t.rejectReason=reason;
+  t.rejectDate=new Date(rejTs).toISOString().split('T')[0];
+  // حفظ تاريخ القطعية السابق (إن وُجد) ثم مسحه لأن التسجيل لم يكتمل
+  if(t.qatiyyaDate){t._prevQatiyyaDate=t.qatiyyaDate;t.qatiyyaDate=null;}
+  if(!t.steps)t.steps=[];
+  t.steps.push({type:'update',text:`⚠️ رُفض التسجيل — السبب: ${reason}`,date:now_(),ts:rejTs,by:currentUser.name,status:t.status});
+  ss('v4_tx',transactions);
+  toast('تم تسجيل الرفض','ok');
+  closeModal('mRejectReg');
+  if(typeof renderRealEstate==='function') renderRealEstate();
+  if(typeof openTxDetail==='function'&&document.getElementById('mTxDetail')?.classList.contains('show')) openTxDetail(t.id);
+}
+// فتح نافذة معالجة وإعادة تقديم
+function openReprocessRejection(txId){
+  const t=transactions.find(x=>x.id===txId);
+  if(!t) return;
+  rejectionTxId=txId;
+  const noteEl=document.getElementById('reprocNote');if(noteEl)noteEl.value='';
+  const dw=document.getElementById('reprocDateWrap');
+  if(dw&&typeof makeDateTimeField==='function') dw.innerHTML=makeDateTimeField('reprocDate',{withTime:false});
+  // عرض سبب الرفض السابق
+  const reasonShow=document.getElementById('reprocPrevReason');
+  if(reasonShow) reasonShow.textContent=t.rejectReason||'غير محدد';
+  openModal('mReprocessReg');
+}
+// حفظ المعالجة وإعادة التقديم
+function saveReprocessRejection(){
+  const t=transactions.find(x=>x.id===rejectionTxId);
+  if(!t) return;
+  const note=document.getElementById('reprocNote')?.value.trim()||'';
+  const manualTs=(typeof readDateTimeField==='function')?readDateTimeField('reprocDate'):null;
+  const repTs=manualTs||Date.now();
+  t.rerRejected=false;
+  const prevReason=t.rejectReason||'';
+  t.rejectReason=null;t.rejectDate=null;
+  if(!t.steps)t.steps=[];
+  const noteTxt=note?` — ${note}`:'';
+  t.steps.push({type:'update',text:`🔄 تمت معالجة الرفض وإعادة التقديم${noteTxt}`,date:now_(),ts:repTs,by:currentUser.name,status:t.status});
+  ss('v4_tx',transactions);
+  toast('تمت المعالجة وإعادة التقديم','ok');
+  closeModal('mReprocessReg');
+  if(typeof renderRealEstate==='function') renderRealEstate();
+  if(typeof openTxDetail==='function'&&document.getElementById('mTxDetail')?.classList.contains('show')) openTxDetail(t.id);
+}
+
+// ════════════════════════════════════════════════════════════
+// تصحيح التسجيل (Registration Correction)
+// الصك سُجّل فعلاً لكن به خطأ — يبقى تاريخ القطعية، تُضاف شارة "قيد التصحيح"
+// ════════════════════════════════════════════════════════════
+let correctionTxId=null;
+// فتح نافذة بدء التصحيح
+function openCorrectRegistration(txId){
+  const t=transactions.find(x=>x.id===txId);
+  if(!t) return;
+  correctionTxId=txId;
+  const reasonEl=document.getElementById('corrReason');if(reasonEl)reasonEl.value='';
+  const dw=document.getElementById('corrDateWrap');
+  if(dw&&typeof makeDateTimeField==='function') dw.innerHTML=makeDateTimeField('corrDate',{withTime:false});
+  openModal('mCorrectReg');
+}
+// حفظ بدء التصحيح
+function saveCorrectRegistration(){
+  const t=transactions.find(x=>x.id===correctionTxId);
+  if(!t) return;
+  const reason=document.getElementById('corrReason')?.value.trim()||'';
+  if(!reason){toast('يرجى إدخال سبب/تفاصيل التصحيح','er');return;}
+  const manualTs=(typeof readDateTimeField==='function')?readDateTimeField('corrDate'):null;
+  const corrTs=manualTs||Date.now();
+  t.rerCorrecting=true;
+  t.correctionReason=reason;
+  t.correctionStartDate=new Date(corrTs).toISOString().split('T')[0];
+  // تاريخ القطعية يبقى كما هو (لا يُمسح)
+  if(!t.steps)t.steps=[];
+  t.steps.push({type:'update',text:`🔧 بدء تصحيح التسجيل — ${reason}`,date:now_(),ts:corrTs,by:currentUser.name,status:t.status});
+  ss('v4_tx',transactions);
+  toast('تم بدء إجراء التصحيح','ok');
+  closeModal('mCorrectReg');
+  if(typeof renderRealEstate==='function') renderRealEstate();
+  if(typeof openTxDetail==='function'&&document.getElementById('mTxDetail')?.classList.contains('show')) openTxDetail(t.id);
+}
+// فتح نافذة إكمال التصحيح
+function openCompleteCorrection(txId){
+  const t=transactions.find(x=>x.id===txId);
+  if(!t) return;
+  correctionTxId=txId;
+  const noteEl=document.getElementById('corrCompNote');if(noteEl)noteEl.value='';
+  const dw=document.getElementById('corrCompDateWrap');
+  if(dw&&typeof makeDateTimeField==='function') dw.innerHTML=makeDateTimeField('corrCompDate',{withTime:false});
+  const reasonShow=document.getElementById('corrCompPrevReason');
+  if(reasonShow) reasonShow.textContent=t.correctionReason||'غير محدد';
+  openModal('mCompleteCorr');
+}
+// حفظ إكمال التصحيح
+function saveCompleteCorrection(){
+  const t=transactions.find(x=>x.id===correctionTxId);
+  if(!t) return;
+  const note=document.getElementById('corrCompNote')?.value.trim()||'';
+  const manualTs=(typeof readDateTimeField==='function')?readDateTimeField('corrCompDate'):null;
+  const compTs=manualTs||Date.now();
+  t.rerCorrecting=false;
+  t.correctionReason=null;t.correctionStartDate=null;
+  t.correctionDoneDate=new Date(compTs).toISOString().split('T')[0];
+  if(!t.steps)t.steps=[];
+  const noteTxt=note?` — ${note}`:'';
+  t.steps.push({type:'update',text:`✅ تم تصحيح التسجيل${noteTxt}`,date:now_(),ts:compTs,by:currentUser.name,status:t.status});
+  ss('v4_tx',transactions);
+  toast('تم تصحيح التسجيل بنجاح','ok');
+  closeModal('mCompleteCorr');
+  if(typeof renderRealEstate==='function') renderRealEstate();
+  if(typeof openTxDetail==='function'&&document.getElementById('mTxDetail')?.classList.contains('show')) openTxDetail(t.id);
 }
 
 function buildQatiyyaAlerts(){
@@ -11520,7 +11856,7 @@ function renderAlertCardCompact(t,colorVal){
   const chain=getRenewalChain(t.id);
   // Get Hijri for end date
   let hijriEnd='';
-  if(t.validityEnd){try{hijriEnd=' ('+toHijri(new Date(t.validityEnd))+'هـ)';}catch(e){}}
+  if(t.validityEnd){try{hijriEnd=' ('+hijriStr(new Date(t.validityEnd))+'هـ)';}catch(e){}}
   return `<div style="background:#fff;border:1px solid #E5E7EB;border-right:3px solid ${colorVal};border-radius:8px;padding:10px 13px;margin-bottom:6px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:5px;flex-wrap:wrap">
       <div style="flex:1;min-width:0;display:flex;align-items:center;gap:5px;flex-wrap:wrap">
@@ -11742,6 +12078,7 @@ function alertRenew(id){
   t.steps.push({
     text:'إعادة تنشيط للتجديد',
     date:now_(),
+    ts:Date.now(),
     by:currentUser.name,
     status:'تحت الإجراء',
     note:`تم إعادة تنشيط المعاملة لتجديد الصلاحية (كانت تنتهي في ${t.validityEnd||t.dateEnd})`
@@ -11780,6 +12117,7 @@ function saveAlertEdit(){
   t.steps.push({
     text:`تعديل صلاحية المعاملة`,
     date:now_(),
+    ts:Date.now(),
     by:currentUser.name,
     note:`تاريخ الانتهاء: ${oldEnd} → ${newEnd}`
   });
@@ -11802,7 +12140,7 @@ function alertRemoveValidity(id){
   t.validityStart=null;
   t.validityNote=null;
   // Keep dateEnd but mark no validity tracking
-  t.steps.push({text:'إزالة تتبع الصلاحية',date:now_(),by:currentUser.name});
+  t.steps.push({text:'إزالة تتبع الصلاحية',date:now_(),ts:Date.now(),by:currentUser.name});
   ss('v4_tx',transactions);
   toast('تم حذف الصلاحية من التنبيهات','ok');
   renderAlerts();
@@ -11827,7 +12165,7 @@ function generateOneClickReport(){
 
   const arMonths=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   const fmtAr=d=>`${d.getDate()} ${arMonths[d.getMonth()]} ${d.getFullYear()}`;
-  const fmtShort=ts=>{const d=new Date(ts);return `${d.getDate()}/${d.getMonth()+1}/${String(d.getFullYear()).slice(-2)}`;};
+  const fmtShort=ts=>{const d=new Date(ts);return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;};
 
   const baseTx=transactions.filter(t=>!t.hidden);
 
@@ -13306,6 +13644,122 @@ function exportSinglePDF(id){
 // ══════════════════════════════════════════════════════════════════
 function daysLeft(ds){if(!ds)return 9999;return Math.round((new Date(ds)-new Date())/(864e5));}
 function timeSince(ts){const h=Math.floor((Date.now()-ts)/36e5);return h<24?h+'س':Math.floor(h/24)+'ي';}
+// ════════════════════════════════════════════════════════════
+// UNIFIED DATETIME COMPONENT (مكوّن التاريخ والوقت الموحّد)
+// قائمة تقويم منسدلة + تاريخ ووقت + هجري بقوائم منسدلة + تلقائي عند الفراغ
+// ════════════════════════════════════════════════════════════
+const AR_MONTHS_G=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+const AR_MONTHS_H=['محرم','صفر','ربيع الأول','ربيع الآخر','جمادى الأولى','جمادى الآخرة','رجب','شعبان','رمضان','شوال','ذو القعدة','ذو الحجة'];
+
+// تنسيق طابع زمني رقمي → نص عربي بالسنة الكاملة + الوقت
+function fmtDateTime(ts,withTime){
+  if(!ts||isNaN(ts)) return '—';
+  const d=new Date(ts);
+  const dateStr=`${d.getDate()} ${AR_MONTHS_G[d.getMonth()]} ${d.getFullYear()}`;
+  if(withTime===false) return dateStr;
+  const hh=String(d.getHours()).padStart(2,'0');
+  const mm=String(d.getMinutes()).padStart(2,'0');
+  return `${dateStr} - ${hh}:${mm}`;
+}
+// تنسيق هجري من طابع زمني
+function fmtHijriFromTs(ts){
+  if(!ts||isNaN(ts)) return '';
+  try{const h=toHijri(new Date(ts));if(!h)return '';return `${h.d} ${AR_MONTHS_H[h.m-1]} ${h.y} هـ`;}catch(e){return '';}
+}
+
+// بناء حقل التاريخ والوقت الموحّد
+function makeDateTimeField(fieldId,opts){
+  opts=opts||{};
+  const withTime=opts.withTime!==false;
+  const now=new Date();
+  const curYearH=(()=>{try{return toHijri(now).y;}catch(e){return 1447;}})();
+  // قوائم الهجري
+  let dayOpts='',monthOpts='',yearOpts='';
+  for(let i=1;i<=30;i++) dayOpts+=`<option value="${i}">${i}</option>`;
+  AR_MONTHS_H.forEach((m,i)=>{monthOpts+=`<option value="${i+1}">${m}</option>`;});
+  for(let y=curYearH+1;y>=curYearH-5;y--) yearOpts+=`<option value="${y}">${y}</option>`;
+  const timeField=withTime?`<input type="time" class="finp" id="${fieldId}_time" style="flex:0 0 auto;width:auto">`:'';
+  return `<div data-dt="${fieldId}" style="display:flex;flex-direction:column;gap:7px">
+    <div style="display:flex;gap:6px;align-items:stretch;flex-wrap:wrap">
+      <select id="${fieldId}_cal" onchange="dtSwitchCal('${fieldId}')" style="flex:0 0 auto;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;background:#F8FAFC;color:var(--text);cursor:pointer">
+        <option value="g">🌐 ميلادي</option>
+        <option value="h">🌙 هجري</option>
+      </select>
+      <!-- ميلادي -->
+      <span id="${fieldId}_gWrap" style="display:flex;gap:6px;flex:1;min-width:160px">
+        <input type="date" class="finp" id="${fieldId}_g" oninput="dtOnInput('${fieldId}','g')" style="flex:1">
+        ${timeField}
+      </span>
+      <!-- هجري بقوائم -->
+      <span id="${fieldId}_hWrap" style="display:none;gap:5px;flex:1;min-width:160px">
+        <select class="finp" id="${fieldId}_hd" onchange="dtOnInput('${fieldId}','h')" style="flex:0 0 auto;padding:8px 6px"><option value="">يوم</option>${dayOpts}</select>
+        <select class="finp" id="${fieldId}_hm" onchange="dtOnInput('${fieldId}','h')" style="flex:1;padding:8px 6px"><option value="">شهر</option>${monthOpts}</select>
+        <select class="finp" id="${fieldId}_hy" onchange="dtOnInput('${fieldId}','h')" style="flex:0 0 auto;padding:8px 6px"><option value="">سنة</option>${yearOpts}</select>
+      </span>
+    </div>
+    <div id="${fieldId}_mirror" style="font-size:10.5px;color:var(--indigo);min-height:14px"></div>
+  </div>`;
+}
+function dtSwitchCal(fieldId){
+  const cal=document.getElementById(fieldId+'_cal')?.value;
+  const gw=document.getElementById(fieldId+'_gWrap');
+  const hw=document.getElementById(fieldId+'_hWrap');
+  if(!gw||!hw) return;
+  if(cal==='h'){gw.style.display='none';hw.style.display='flex';}
+  else{gw.style.display='flex';hw.style.display='none';}
+  dtUpdateMirror(fieldId);
+}
+function dtOnInput(fieldId,from){
+  const gEl=document.getElementById(fieldId+'_g');
+  if(from==='h'){
+    // هجري (قوائم) → ميلادي
+    const hd=parseInt(document.getElementById(fieldId+'_hd')?.value);
+    const hm=parseInt(document.getElementById(fieldId+'_hm')?.value);
+    const hy=parseInt(document.getElementById(fieldId+'_hy')?.value);
+    if(hd&&hm&&hy){
+      try{const g=fromHijri(hy,hm,hd);if(g&&!isNaN(g.getTime())&&gEl)gEl.value=g.toISOString().split('T')[0];}catch(e){}
+    }
+  }
+  dtUpdateMirror(fieldId);
+}
+function dtUpdateMirror(fieldId){
+  const cal=document.getElementById(fieldId+'_cal')?.value;
+  const gEl=document.getElementById(fieldId+'_g');
+  const mirror=document.getElementById(fieldId+'_mirror');
+  if(!mirror) return;
+  if(cal==='h'){
+    // المعروض هجري، المرآة ميلادي
+    if(gEl&&gEl.value){const d=new Date(gEl.value);mirror.innerHTML=`🌐 الميلادي: <b style="font-family:'JetBrains Mono'">${d.getDate()} ${AR_MONTHS_G[d.getMonth()]} ${d.getFullYear()}</b>`;}
+    else mirror.innerHTML='';
+  } else {
+    // المعروض ميلادي، المرآة هجري
+    if(gEl&&gEl.value){try{const h=toHijri(new Date(gEl.value));if(h){mirror.innerHTML=`🌙 الهجري: <b style="font-family:'JetBrains Mono'">${h.d} ${AR_MONTHS_H[h.m-1]} ${h.y} هـ</b>`;}}catch(e){mirror.innerHTML='';}}
+    else mirror.innerHTML='';
+  }
+}
+function updateDtMirrorSafe(fieldId){try{dtUpdateMirror(fieldId);}catch(e){}}
+// قراءة القيمة كطابع زمني رقمي كنص ISO للتواريخ (للصلاحية). فارغ → ''
+function readDateOnlyField(fieldId){
+  const gEl=document.getElementById(fieldId+'_g');
+  return gEl?.value||'';
+}
+// قراءة القيمة كطابع زمني رقمي (مع الوقت). فارغ → null (المُستدعي يضع Date.now())
+function readDateTimeField(fieldId){
+  const cal=document.getElementById(fieldId+'_cal')?.value;
+  const gEl=document.getElementById(fieldId+'_g');
+  let dateStr=gEl?.value||'';
+  if(!dateStr) return null;
+  let ts=new Date(dateStr).getTime();
+  if(isNaN(ts)) return null;
+  // أضف الوقت إن وُجد
+  const timeEl=document.getElementById(fieldId+'_time');
+  if(timeEl&&timeEl.value){
+    const [h,m]=timeEl.value.split(':').map(Number);
+    const d=new Date(ts);d.setHours(h||0,m||0,0,0);ts=d.getTime();
+  }
+  return ts;
+}
+
 function now_(){return new Date().toLocaleDateString('ar-SA');}
 function getExpiring(){return transactions.filter(t=>t.dateEnd&&daysLeft(t.dateEnd)<=(settings_.remDays||30)).sort((a,b)=>daysLeft(a.dateEnd)-daysLeft(b.dateEnd));}
 
@@ -13565,6 +14019,10 @@ function toHijri(gDate){
       return { y: y2, m: m2 === 0 ? 12 : m2, d: d2 };
     }
   }
+  // مساعدة: تحويل كائن toHijri إلى نص "d/m/y" (للأماكن التي تتوقّع نصاً)
+  function hijriStr(gDate){
+    try{const h=toHijri(gDate);if(!h)return '';return `${h.y}/${String(h.m).padStart(2,'0')}/${String(h.d).padStart(2,'0')}`;}catch(e){return '';}
+  }
 
   function updateClock(){
     const now = new Date();
@@ -13749,7 +14207,7 @@ function hideTx(txId){
   if(!canManage()){toast('🚫 للمدير فقط','er');return;}
   const t=transactions.find(x=>x.id===txId);if(!t)return;
   t.hidden=!t.hidden;
-  t.steps.push({text:t.hidden?'إخفاء المعاملة':'إظهار المعاملة',date:now_(),by:currentUser.name,status:t.status});
+  t.steps.push({text:t.hidden?'إخفاء المعاملة':'إظهار المعاملة',date:now_(),ts:Date.now(),by:currentUser.name,status:t.status});
   addAudit(t.hidden?'إخفاء':'إظهار',`${t.name}`,txId);
   ss('v4_tx',transactions);closeModal('mTxDetail');
   toast(t.hidden?'🙈 مخفية':'👁 مرئية','ok');
@@ -13778,7 +14236,7 @@ function lockTransaction(txId){
   if(t.locked){
     if(!confirm(`هل تريد فتح قفل المعاملة "${t.name}"؟`)) return;
     t.locked=false;
-    t.steps.push({text:'تم فتح قفل المعاملة',date:now_(),by:currentUser.name,status:t.status});
+    t.steps.push({text:'تم فتح قفل المعاملة',date:now_(),ts:Date.now(),by:currentUser.name,status:t.status});
     addAudit('فتح قفل',`فتح قفل المعاملة: ${t.name}`,txId);
     toast(`🔓 تم فتح قفل المعاملة: ${t.code}`,'ok');
     sendBrowserNotif('🔓 فتح قفل معاملة',`تم فتح قفل "${t.name}" بواسطة ${currentUser.name}`,txId);
@@ -13789,7 +14247,7 @@ function lockTransaction(txId){
     t.locked=true;
     t.lockedAt=Date.now();
     t.lockedBy=currentUser.name;
-    t.steps.push({text:'تم قفل المعاملة',date:now_(),by:currentUser.name,status:t.status});
+    t.steps.push({text:'تم قفل المعاملة',date:now_(),ts:Date.now(),by:currentUser.name,status:t.status});
     addAudit('قفل',`قفل المعاملة: ${t.name}`,txId);
     toast(`🔒 تم قفل المعاملة: ${t.code} — لن يمكن تعديلها إلا بموافقة المدير`,'ok');
     sendBrowserNotif('🔒 قفل معاملة',`تم قفل "${t.name}" بواسطة ${currentUser.name}`,txId);
