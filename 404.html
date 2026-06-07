@@ -13684,10 +13684,10 @@ function makeDateTimeField(fieldId,opts){
         ${timeField}
       </span>
       <!-- منتقي هجري شبكي -->
-      <span id="${fieldId}_hWrap" style="display:none;gap:6px;flex:1;min-width:160px;position:relative">
+      <span id="${fieldId}_hWrap" style="display:none;gap:6px;flex:1;min-width:160px;flex-wrap:wrap;align-items:flex-start">
         <input type="text" class="finp" id="${fieldId}_hdisp" readonly onclick="dtToggleHijriCal('${fieldId}')" placeholder="اختر التاريخ الهجري" style="flex:1;cursor:pointer;background:#fff" value="">
         ${withTime?`<input type="time" class="finp" id="${fieldId}_htime" onchange="dtSyncHijriTime('${fieldId}')" style="flex:0 0 auto;width:auto">`:''}
-        <div id="${fieldId}_hcal" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,.15);width:300px"></div>
+        <div id="${fieldId}_hcal" style="display:none;width:100%;margin-top:6px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 4px 16px rgba(0,0,0,.1)"></div>
       </span>
     </div>
     <div id="${fieldId}_mirror" style="font-size:10.5px;color:var(--indigo);min-height:14px"></div>
