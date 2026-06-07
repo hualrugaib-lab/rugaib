@@ -13735,6 +13735,7 @@ function dtToggleHijriCal(fieldId){
     let baseH;
     try{baseH=toHijri(gEl&&gEl.value?new Date(gEl.value):new Date());}catch(e){baseH={y:1447,m:1,d:1};}
     cal._viewY=baseH.y;cal._viewM=baseH.m;
+    cal._pickMode=false;
     dtRenderHijriCal(fieldId);
     cal.style.display='block';
   } else {
@@ -13746,6 +13747,8 @@ function dtRenderHijriCal(fieldId){
   const cal=document.getElementById(fieldId+'_hcal');
   if(!cal) return;
   const vy=cal._viewY, vm=cal._viewM;
+  // وضع اختيار الشهر/السنة
+  if(cal._pickMode){dtRenderHijriPicker(fieldId);return;}
   // القيمة المختارة حالياً (هجري) للإبراز
   const gEl=document.getElementById(fieldId+'_g');
   let selH=null;
@@ -13764,7 +13767,7 @@ function dtRenderHijriCal(fieldId){
   const dows=['سبت','أحد','اثن','ثلا','أرب','خمي','جمع'];
   let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <button type="button" onclick="dtHijriNav('${fieldId}',1)" style="border:none;background:#f1f5f9;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px">›</button>
-    <div style="font-size:14px;font-weight:800;color:#0f2942">${AR_MONTHS_H[vm-1]} ${vy}</div>
+    <button type="button" onclick="dtToggleHijriPicker('${fieldId}')" style="border:none;background:#f0fdfa;padding:5px 14px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:800;color:#0f766e;display:flex;align-items:center;gap:5px">${AR_MONTHS_H[vm-1]} ${vy} <span style="font-size:9px;opacity:.6">▾</span></button>
     <button type="button" onclick="dtHijriNav('${fieldId}',-1)" style="border:none;background:#f1f5f9;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px">‹</button>
   </div>
   <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">${dows.map(d=>`<span style="text-align:center;font-size:10px;color:#94a3b8;font-weight:700;padding:4px 0">${d}</span>`).join('')}</div>
@@ -13775,10 +13778,52 @@ function dtRenderHijriCal(fieldId){
     html+=`<span onclick="dtPickHijri('${fieldId}',${vy},${vm},${d})" style="height:36px;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:13px;cursor:pointer;font-family:'JetBrains Mono';${isSel?'background:#0F766E;color:#fff;font-weight:700':'color:#334155'}" onmouseover="if(!${isSel})this.style.background='#f0fdfa'" onmouseout="if(!${isSel})this.style.background='transparent'">${d}</span>`;
   }
   html+='</div>';
-  // الموافق الميلادي
-  let gregStr='';
-  try{const g=fromHijri(vy,vm,selH&&selH.y===vy&&selH.m===vm?selH.d:1);if(g)gregStr=`${g.getDate()} ${AR_MONTHS_G[g.getMonth()]} ${g.getFullYear()}`;}catch(e){}
   cal.innerHTML=html;
+}
+// وضع اختيار الشهر والسنة (مثل الميلادي)
+function dtToggleHijriPicker(fieldId){
+  const cal=document.getElementById(fieldId+'_hcal');
+  if(!cal) return;
+  cal._pickMode=!cal._pickMode;
+  dtRenderHijriCal(fieldId);
+}
+function dtRenderHijriPicker(fieldId){
+  const cal=document.getElementById(fieldId+'_hcal');
+  if(!cal) return;
+  const vy=cal._viewY, vm=cal._viewM;
+  // شبكة الأشهر
+  let monthsHtml='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">';
+  AR_MONTHS_H.forEach((mn,i)=>{
+    const isSel=(i+1)===vm;
+    monthsHtml+=`<span onclick="dtSetHijriMonth('${fieldId}',${i+1})" style="padding:8px 4px;text-align:center;border-radius:8px;font-size:11px;cursor:pointer;${isSel?'background:#0F766E;color:#fff;font-weight:700':'background:#f8fafc;color:#334155'}" onmouseover="if(!${isSel})this.style.background='#f0fdfa'" onmouseout="if(!${isSel})this.style.background='#f8fafc'">${mn}</span>`;
+  });
+  monthsHtml+='</div>';
+  // قائمة السنوات (نطاق ±10 حول السنة المعروضة)
+  let yearsHtml='<div style="max-height:140px;overflow-y:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:6px">';
+  for(let y=vy+10;y>=vy-10;y--){
+    const isSel=y===vy;
+    yearsHtml+=`<span onclick="dtSetHijriYear('${fieldId}',${y})" style="padding:8px 4px;text-align:center;border-radius:8px;font-size:12px;cursor:pointer;font-family:'JetBrains Mono';${isSel?'background:#0F766E;color:#fff;font-weight:700':'background:#f8fafc;color:#334155'}" onmouseover="if(!${isSel})this.style.background='#f0fdfa'" onmouseout="if(!${isSel})this.style.background='#f8fafc'">${y}</span>`;
+  }
+  yearsHtml+='</div>';
+  cal.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <span style="font-size:13px;font-weight:800;color:#0f2942">اختر الشهر والسنة</span>
+    <button type="button" onclick="dtToggleHijriPicker('${fieldId}')" style="border:none;background:#f1f5f9;padding:5px 12px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;color:#475569">↩ رجوع</button>
+  </div>
+  <div style="font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:6px">الشهر</div>${monthsHtml}
+  <div style="font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:6px">السنة</div>${yearsHtml}`;
+}
+function dtSetHijriMonth(fieldId,m){
+  const cal=document.getElementById(fieldId+'_hcal');
+  if(!cal) return;
+  cal._viewM=m;
+  dtRenderHijriCal(fieldId);
+}
+function dtSetHijriYear(fieldId,y){
+  const cal=document.getElementById(fieldId+'_hcal');
+  if(!cal) return;
+  cal._viewY=y;
+  cal._pickMode=false; // بعد اختيار السنة، نعود لشبكة الأيام
+  dtRenderHijriCal(fieldId);
 }
 // التنقّل بين الأشهر الهجرية
 function dtHijriNav(fieldId,dir){
