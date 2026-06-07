@@ -13646,6 +13646,35 @@ function daysLeft(ds){if(!ds)return 9999;return Math.round((new Date(ds)-new Dat
 function timeSince(ts){const h=Math.floor((Date.now()-ts)/36e5);return h<24?h+'س':Math.floor(h/24)+'ي';}
 // ════════════════════════════════════════════════════════════
 // UNIFIED DATETIME COMPONENT (مكوّن التاريخ والوقت الموحّد)
+// نسخ عالمية مضمونة من دوال التحويل الهجري (الأصلية محبوسة داخل initClock)
+function fromHijri(hy,hm,hd){
+  if(!hy||!hm||!hd) return null;
+  if(hy<1300||hy>1500||hm<1||hm>12||hd<1||hd>30) return null;
+  const jdn=Math.floor((11*hy+3)/30)+354*hy+30*hm-Math.floor((hm-1)/2)+hd+1948440-385;
+  let l=jdn+68569;
+  const n=Math.floor((4*l)/146097);
+  l=l-Math.floor((146097*n+3)/4);
+  const i=Math.floor((4000*(l+1))/1461001);
+  l=l-Math.floor((1461*i)/4)+31;
+  const j=Math.floor((80*l)/2447);
+  const day=l-Math.floor((2447*j)/80);
+  l=Math.floor(j/11);
+  const month=j+2-12*l;
+  const year=100*(n-49)+i+l;
+  return new Date(year,month-1,day);
+}
+function toHijri(gDate){
+  try{
+    const fmt=new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{year:'numeric',month:'numeric',day:'numeric',timeZone:'Asia/Riyadh'});
+    const parts=fmt.formatToParts(gDate);
+    let y,m,d;
+    parts.forEach(p=>{if(p.type==='year')y=parseInt(p.value);if(p.type==='month')m=parseInt(p.value);if(p.type==='day')d=parseInt(p.value);});
+    return {y,m,d};
+  }catch(e){return null;}
+}
+function hijriStr(gDate){
+  try{const h=toHijri(gDate);if(!h)return '';return `${h.y}/${String(h.m).padStart(2,'0')}/${String(h.d).padStart(2,'0')}`;}catch(e){return '';}
+}
 // قائمة تقويم منسدلة + تاريخ ووقت + هجري بقوائم منسدلة + تلقائي عند الفراغ
 // ════════════════════════════════════════════════════════════
 const AR_MONTHS_G=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
@@ -13746,41 +13775,56 @@ function dtToggleHijriCal(fieldId){
 function dtRenderHijriCal(fieldId){
   const cal=document.getElementById(fieldId+'_hcal');
   if(!cal) return;
-  const vy=cal._viewY, vm=cal._viewM;
-  // وضع اختيار الشهر/السنة
   if(cal._pickMode){dtRenderHijriPicker(fieldId);return;}
-  // القيمة المختارة حالياً (هجري) للإبراز
+  const vy=cal._viewY, vm=cal._viewM;
   const gEl=document.getElementById(fieldId+'_g');
   let selH=null;
   if(gEl&&gEl.value){try{selH=toHijri(new Date(gEl.value));}catch(e){}}
-  // أيام الشهر الهجري: نحاول 30 ثم 29
   let daysInMonth=30;
-  try{
-    const test=fromHijri(vy,vm,30);
-    if(test){const back=toHijri(test);if(back.m!==vm||back.d!==30) daysInMonth=29;}
-  }catch(e){daysInMonth=29;}
-  // يوم الأسبوع لأول يوم
+  try{const test=fromHijri(vy,vm,30);if(test){const back=toHijri(test);if(back.m!==vm||back.d!==30) daysInMonth=29;}}catch(e){daysInMonth=29;}
   let firstDow=0;
   try{const g1=fromHijri(vy,vm,1);if(g1)firstDow=g1.getDay();}catch(e){}
-  // ترتيب أيام الأسبوع: السبت=0 ... الجمعة=6 (getDay: الأحد=0)
-  const satIdx=(firstDow+1)%7; // إزاحة لبدء الأسبوع بالسبت
+  const satIdx=(firstDow+1)%7;
   const dows=['سبت','أحد','اثن','ثلا','أرب','خمي','جمع'];
-  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <button type="button" onclick="dtHijriNav('${fieldId}',1)" style="border:none;background:#f1f5f9;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px">›</button>
-    <button type="button" onclick="dtToggleHijriPicker('${fieldId}')" style="border:none;background:#f0fdfa;padding:5px 14px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:800;color:#0f766e;display:flex;align-items:center;gap:5px">${AR_MONTHS_H[vm-1]} ${vy} <span style="font-size:9px;opacity:.6">▾</span></button>
-    <button type="button" onclick="dtHijriNav('${fieldId}',-1)" style="border:none;background:#f1f5f9;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px">‹</button>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">${dows.map(d=>`<span style="text-align:center;font-size:10px;color:#94a3b8;font-weight:700;padding:4px 0">${d}</span>`).join('')}</div>
-  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">`;
-  for(let i=0;i<satIdx;i++) html+='<span></span>';
+  // بناء DOM بدل innerHTML+onclick — مستمعات حقيقية
+  cal.innerHTML='';
+  const hdr=document.createElement('div');
+  hdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px';
+  const btnNext=document.createElement('button');btnNext.type='button';btnNext.textContent='›';
+  btnNext.style.cssText='border:none;background:#f1f5f9;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px';
+  btnNext.addEventListener('click',()=>dtHijriNav(fieldId,1));
+  const btnTitle=document.createElement('button');btnTitle.type='button';
+  btnTitle.innerHTML=`${AR_MONTHS_H[vm-1]} ${vy} <span style="font-size:9px;opacity:.6">▾</span>`;
+  btnTitle.style.cssText='border:none;background:#f0fdfa;padding:5px 14px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:800;color:#0f766e;display:flex;align-items:center;gap:5px';
+  btnTitle.addEventListener('click',()=>dtToggleHijriPicker(fieldId));
+  const btnPrev=document.createElement('button');btnPrev.type='button';btnPrev.textContent='‹';
+  btnPrev.style.cssText='border:none;background:#f1f5f9;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px';
+  btnPrev.addEventListener('click',()=>dtHijriNav(fieldId,-1));
+  hdr.appendChild(btnNext);hdr.appendChild(btnTitle);hdr.appendChild(btnPrev);
+  cal.appendChild(hdr);
+  // أيام الأسبوع
+  const dowRow=document.createElement('div');
+  dowRow.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px';
+  dows.forEach(d=>{const s=document.createElement('span');s.textContent=d;s.style.cssText='text-align:center;font-size:10px;color:#94a3b8;font-weight:700;padding:4px 0';dowRow.appendChild(s);});
+  cal.appendChild(dowRow);
+  // الأيام
+  const grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:2px';
+  for(let i=0;i<satIdx;i++){grid.appendChild(document.createElement('span'));}
   for(let d=1;d<=daysInMonth;d++){
     const isSel=selH&&selH.y===vy&&selH.m===vm&&selH.d===d;
-    html+=`<span onclick="dtPickHijri('${fieldId}',${vy},${vm},${d})" style="height:36px;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:13px;cursor:pointer;font-family:'JetBrains Mono';${isSel?'background:#0F766E;color:#fff;font-weight:700':'color:#334155'}" onmouseover="if(!${isSel})this.style.background='#f0fdfa'" onmouseout="if(!${isSel})this.style.background='transparent'">${d}</span>`;
+    const cell=document.createElement('span');
+    cell.textContent=d;
+    cell.style.cssText=`height:36px;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:13px;cursor:pointer;font-family:'JetBrains Mono';${isSel?'background:#0F766E;color:#fff;font-weight:700':'color:#334155'}`;
+    if(!isSel){
+      cell.addEventListener('mouseover',()=>cell.style.background='#f0fdfa');
+      cell.addEventListener('mouseout',()=>cell.style.background='transparent');
+    }
+    cell.addEventListener('click',()=>dtPickHijri(fieldId,vy,vm,d));
+    grid.appendChild(cell);
   }
-  html+='</div>';
-  cal.innerHTML=html;
+  cal.appendChild(grid);
 }
-// وضع اختيار الشهر والسنة (مثل الميلادي)
 function dtToggleHijriPicker(fieldId){
   const cal=document.getElementById(fieldId+'_hcal');
   if(!cal) return;
@@ -13791,26 +13835,41 @@ function dtRenderHijriPicker(fieldId){
   const cal=document.getElementById(fieldId+'_hcal');
   if(!cal) return;
   const vy=cal._viewY, vm=cal._viewM;
-  // شبكة الأشهر
-  let monthsHtml='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">';
+  cal.innerHTML='';
+  // رأس
+  const hdr=document.createElement('div');
+  hdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px';
+  const ttl=document.createElement('span');ttl.textContent='اختر الشهر والسنة';ttl.style.cssText='font-size:13px;font-weight:800;color:#0f2942';
+  const back=document.createElement('button');back.type='button';back.textContent='↩ رجوع';
+  back.style.cssText='border:none;background:#f1f5f9;padding:5px 12px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;color:#475569';
+  back.addEventListener('click',()=>dtToggleHijriPicker(fieldId));
+  hdr.appendChild(ttl);hdr.appendChild(back);cal.appendChild(hdr);
+  // الأشهر
+  const ml=document.createElement('div');ml.textContent='الشهر';ml.style.cssText='font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:6px';cal.appendChild(ml);
+  const mGrid=document.createElement('div');
+  mGrid.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px';
   AR_MONTHS_H.forEach((mn,i)=>{
     const isSel=(i+1)===vm;
-    monthsHtml+=`<span onclick="dtSetHijriMonth('${fieldId}',${i+1})" style="padding:8px 4px;text-align:center;border-radius:8px;font-size:11px;cursor:pointer;${isSel?'background:#0F766E;color:#fff;font-weight:700':'background:#f8fafc;color:#334155'}" onmouseover="if(!${isSel})this.style.background='#f0fdfa'" onmouseout="if(!${isSel})this.style.background='#f8fafc'">${mn}</span>`;
+    const s=document.createElement('span');s.textContent=mn;
+    s.style.cssText=`padding:8px 4px;text-align:center;border-radius:8px;font-size:11px;cursor:pointer;${isSel?'background:#0F766E;color:#fff;font-weight:700':'background:#f8fafc;color:#334155'}`;
+    if(!isSel){s.addEventListener('mouseover',()=>s.style.background='#f0fdfa');s.addEventListener('mouseout',()=>s.style.background='#f8fafc');}
+    s.addEventListener('click',()=>dtSetHijriMonth(fieldId,i+1));
+    mGrid.appendChild(s);
   });
-  monthsHtml+='</div>';
-  // قائمة السنوات (نطاق ±10 حول السنة المعروضة)
-  let yearsHtml='<div style="max-height:140px;overflow-y:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:6px">';
+  cal.appendChild(mGrid);
+  // السنوات
+  const yl=document.createElement('div');yl.textContent='السنة';yl.style.cssText='font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:6px';cal.appendChild(yl);
+  const yGrid=document.createElement('div');
+  yGrid.style.cssText='max-height:140px;overflow-y:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:6px';
   for(let y=vy+10;y>=vy-10;y--){
     const isSel=y===vy;
-    yearsHtml+=`<span onclick="dtSetHijriYear('${fieldId}',${y})" style="padding:8px 4px;text-align:center;border-radius:8px;font-size:12px;cursor:pointer;font-family:'JetBrains Mono';${isSel?'background:#0F766E;color:#fff;font-weight:700':'background:#f8fafc;color:#334155'}" onmouseover="if(!${isSel})this.style.background='#f0fdfa'" onmouseout="if(!${isSel})this.style.background='#f8fafc'">${y}</span>`;
+    const s=document.createElement('span');s.textContent=y;
+    s.style.cssText=`padding:8px 4px;text-align:center;border-radius:8px;font-size:12px;cursor:pointer;font-family:'JetBrains Mono';${isSel?'background:#0F766E;color:#fff;font-weight:700':'background:#f8fafc;color:#334155'}`;
+    if(!isSel){s.addEventListener('mouseover',()=>s.style.background='#f0fdfa');s.addEventListener('mouseout',()=>s.style.background='#f8fafc');}
+    s.addEventListener('click',()=>dtSetHijriYear(fieldId,y));
+    yGrid.appendChild(s);
   }
-  yearsHtml+='</div>';
-  cal.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <span style="font-size:13px;font-weight:800;color:#0f2942">اختر الشهر والسنة</span>
-    <button type="button" onclick="dtToggleHijriPicker('${fieldId}')" style="border:none;background:#f1f5f9;padding:5px 12px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;color:#475569">↩ رجوع</button>
-  </div>
-  <div style="font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:6px">الشهر</div>${monthsHtml}
-  <div style="font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:6px">السنة</div>${yearsHtml}`;
+  cal.appendChild(yGrid);
 }
 function dtSetHijriMonth(fieldId,m){
   const cal=document.getElementById(fieldId+'_hcal');
@@ -13822,10 +13881,9 @@ function dtSetHijriYear(fieldId,y){
   const cal=document.getElementById(fieldId+'_hcal');
   if(!cal) return;
   cal._viewY=y;
-  cal._pickMode=false; // بعد اختيار السنة، نعود لشبكة الأيام
+  cal._pickMode=false;
   dtRenderHijriCal(fieldId);
 }
-// التنقّل بين الأشهر الهجرية
 function dtHijriNav(fieldId,dir){
   const cal=document.getElementById(fieldId+'_hcal');
   if(!cal) return;
@@ -13834,7 +13892,6 @@ function dtHijriNav(fieldId,dir){
   if(cal._viewM<1){cal._viewM=12;cal._viewY--;}
   dtRenderHijriCal(fieldId);
 }
-// اختيار يوم هجري → تحويل لميلادي وحفظه في _g
 function dtPickHijri(fieldId,hy,hm,hd){
   try{
     const g=fromHijri(hy,hm,hd);
@@ -13847,7 +13904,7 @@ function dtPickHijri(fieldId,hy,hm,hd){
   const cal=document.getElementById(fieldId+'_hcal');if(cal)cal.style.display='none';
   dtUpdateMirror(fieldId);
 }
-// مزامنة وقت الهجري مع حقل الوقت الميلادي
+
 function dtSyncHijriTime(fieldId){
   const ht=document.getElementById(fieldId+'_htime'),t=document.getElementById(fieldId+'_time');
   if(ht&&t) t.value=ht.value;
