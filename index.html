@@ -13671,13 +13671,6 @@ function fmtHijriFromTs(ts){
 function makeDateTimeField(fieldId,opts){
   opts=opts||{};
   const withTime=opts.withTime!==false;
-  const now=new Date();
-  const curYearH=(()=>{try{return toHijri(now).y;}catch(e){return 1447;}})();
-  // قوائم الهجري
-  let dayOpts='',monthOpts='',yearOpts='';
-  for(let i=1;i<=30;i++) dayOpts+=`<option value="${i}">${i}</option>`;
-  AR_MONTHS_H.forEach((m,i)=>{monthOpts+=`<option value="${i+1}">${m}</option>`;});
-  for(let y=curYearH+1;y>=curYearH-5;y--) yearOpts+=`<option value="${y}">${y}</option>`;
   const timeField=withTime?`<input type="time" class="finp" id="${fieldId}_time" style="flex:0 0 auto;width:auto">`:'';
   return `<div data-dt="${fieldId}" style="display:flex;flex-direction:column;gap:7px">
     <div style="display:flex;gap:6px;align-items:stretch;flex-wrap:wrap">
@@ -13685,16 +13678,16 @@ function makeDateTimeField(fieldId,opts){
         <option value="g">🌐 ميلادي</option>
         <option value="h">🌙 هجري</option>
       </select>
-      <!-- ميلادي -->
+      <!-- التخزين الموحّد: ميلادي دائماً -->
       <span id="${fieldId}_gWrap" style="display:flex;gap:6px;flex:1;min-width:160px">
         <input type="date" class="finp" id="${fieldId}_g" oninput="dtOnInput('${fieldId}','g')" style="flex:1">
         ${timeField}
       </span>
-      <!-- هجري بقوائم -->
-      <span id="${fieldId}_hWrap" style="display:none;gap:5px;flex:1;min-width:160px">
-        <select class="finp" id="${fieldId}_hd" onchange="dtOnInput('${fieldId}','h')" style="flex:0 0 auto;padding:8px 6px"><option value="">يوم</option>${dayOpts}</select>
-        <select class="finp" id="${fieldId}_hm" onchange="dtOnInput('${fieldId}','h')" style="flex:1;padding:8px 6px"><option value="">شهر</option>${monthOpts}</select>
-        <select class="finp" id="${fieldId}_hy" onchange="dtOnInput('${fieldId}','h')" style="flex:0 0 auto;padding:8px 6px"><option value="">سنة</option>${yearOpts}</select>
+      <!-- منتقي هجري شبكي -->
+      <span id="${fieldId}_hWrap" style="display:none;gap:6px;flex:1;min-width:160px;position:relative">
+        <input type="text" class="finp" id="${fieldId}_hdisp" readonly onclick="dtToggleHijriCal('${fieldId}')" placeholder="اختر التاريخ الهجري" style="flex:1;cursor:pointer;background:#fff" value="">
+        ${withTime?`<input type="time" class="finp" id="${fieldId}_htime" onchange="dtSyncHijriTime('${fieldId}')" style="flex:0 0 auto;width:auto">`:''}
+        <div id="${fieldId}_hcal" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,.15);width:300px"></div>
       </span>
     </div>
     <div id="${fieldId}_mirror" style="font-size:10.5px;color:var(--indigo);min-height:14px"></div>
@@ -13705,22 +13698,114 @@ function dtSwitchCal(fieldId){
   const gw=document.getElementById(fieldId+'_gWrap');
   const hw=document.getElementById(fieldId+'_hWrap');
   if(!gw||!hw) return;
-  if(cal==='h'){gw.style.display='none';hw.style.display='flex';}
-  else{gw.style.display='flex';hw.style.display='none';}
+  if(cal==='h'){
+    gw.style.display='none';hw.style.display='flex';
+    // مزامنة عرض الهجري من القيمة الميلادية الحالية
+    dtRefreshHijriDisplay(fieldId);
+    // مزامنة الوقت
+    const t=document.getElementById(fieldId+'_time'),ht=document.getElementById(fieldId+'_htime');
+    if(t&&ht&&t.value) ht.value=t.value;
+  } else {
+    gw.style.display='flex';hw.style.display='none';
+    const hcal=document.getElementById(fieldId+'_hcal');if(hcal)hcal.style.display='none';
+  }
   dtUpdateMirror(fieldId);
 }
 function dtOnInput(fieldId,from){
-  const gEl=document.getElementById(fieldId+'_g');
-  if(from==='h'){
-    // هجري (قوائم) → ميلادي
-    const hd=parseInt(document.getElementById(fieldId+'_hd')?.value);
-    const hm=parseInt(document.getElementById(fieldId+'_hm')?.value);
-    const hy=parseInt(document.getElementById(fieldId+'_hy')?.value);
-    if(hd&&hm&&hy){
-      try{const g=fromHijri(hy,hm,hd);if(g&&!isNaN(g.getTime())&&gEl)gEl.value=g.toISOString().split('T')[0];}catch(e){}
-    }
-  }
+  // الميلادي تغيّر مباشرة — نحدّث المرآة وعرض الهجري
+  dtRefreshHijriDisplay(fieldId);
   dtUpdateMirror(fieldId);
+}
+// تحديث نص حقل العرض الهجري من قيمة _g الميلادية
+function dtRefreshHijriDisplay(fieldId){
+  const gEl=document.getElementById(fieldId+'_g');
+  const disp=document.getElementById(fieldId+'_hdisp');
+  if(!gEl||!disp) return;
+  if(gEl.value){
+    try{const h=toHijri(new Date(gEl.value));if(h){disp.value=`${h.d} ${AR_MONTHS_H[h.m-1]} ${h.y} هـ`;}}catch(e){disp.value='';}
+  } else disp.value='';
+}
+// فتح/إغلاق شبكة التقويم الهجري
+function dtToggleHijriCal(fieldId){
+  const cal=document.getElementById(fieldId+'_hcal');
+  if(!cal) return;
+  if(cal.style.display==='none'||!cal.style.display){
+    // حدّد الشهر المعروض: من القيمة الحالية أو اليوم
+    const gEl=document.getElementById(fieldId+'_g');
+    let baseH;
+    try{baseH=toHijri(gEl&&gEl.value?new Date(gEl.value):new Date());}catch(e){baseH={y:1447,m:1,d:1};}
+    cal._viewY=baseH.y;cal._viewM=baseH.m;
+    dtRenderHijriCal(fieldId);
+    cal.style.display='block';
+  } else {
+    cal.style.display='none';
+  }
+}
+// رسم شبكة الشهر الهجري
+function dtRenderHijriCal(fieldId){
+  const cal=document.getElementById(fieldId+'_hcal');
+  if(!cal) return;
+  const vy=cal._viewY, vm=cal._viewM;
+  // القيمة المختارة حالياً (هجري) للإبراز
+  const gEl=document.getElementById(fieldId+'_g');
+  let selH=null;
+  if(gEl&&gEl.value){try{selH=toHijri(new Date(gEl.value));}catch(e){}}
+  // أيام الشهر الهجري: نحاول 30 ثم 29
+  let daysInMonth=30;
+  try{
+    const test=fromHijri(vy,vm,30);
+    if(test){const back=toHijri(test);if(back.m!==vm||back.d!==30) daysInMonth=29;}
+  }catch(e){daysInMonth=29;}
+  // يوم الأسبوع لأول يوم
+  let firstDow=0;
+  try{const g1=fromHijri(vy,vm,1);if(g1)firstDow=g1.getDay();}catch(e){}
+  // ترتيب أيام الأسبوع: السبت=0 ... الجمعة=6 (getDay: الأحد=0)
+  const satIdx=(firstDow+1)%7; // إزاحة لبدء الأسبوع بالسبت
+  const dows=['سبت','أحد','اثن','ثلا','أرب','خمي','جمع'];
+  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <button type="button" onclick="dtHijriNav('${fieldId}',1)" style="border:none;background:#f1f5f9;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px">›</button>
+    <div style="font-size:14px;font-weight:800;color:#0f2942">${AR_MONTHS_H[vm-1]} ${vy}</div>
+    <button type="button" onclick="dtHijriNav('${fieldId}',-1)" style="border:none;background:#f1f5f9;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px">‹</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">${dows.map(d=>`<span style="text-align:center;font-size:10px;color:#94a3b8;font-weight:700;padding:4px 0">${d}</span>`).join('')}</div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">`;
+  for(let i=0;i<satIdx;i++) html+='<span></span>';
+  for(let d=1;d<=daysInMonth;d++){
+    const isSel=selH&&selH.y===vy&&selH.m===vm&&selH.d===d;
+    html+=`<span onclick="dtPickHijri('${fieldId}',${vy},${vm},${d})" style="height:36px;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:13px;cursor:pointer;font-family:'JetBrains Mono';${isSel?'background:#0F766E;color:#fff;font-weight:700':'color:#334155'}" onmouseover="if(!${isSel})this.style.background='#f0fdfa'" onmouseout="if(!${isSel})this.style.background='transparent'">${d}</span>`;
+  }
+  html+='</div>';
+  // الموافق الميلادي
+  let gregStr='';
+  try{const g=fromHijri(vy,vm,selH&&selH.y===vy&&selH.m===vm?selH.d:1);if(g)gregStr=`${g.getDate()} ${AR_MONTHS_G[g.getMonth()]} ${g.getFullYear()}`;}catch(e){}
+  cal.innerHTML=html;
+}
+// التنقّل بين الأشهر الهجرية
+function dtHijriNav(fieldId,dir){
+  const cal=document.getElementById(fieldId+'_hcal');
+  if(!cal) return;
+  cal._viewM+=dir;
+  if(cal._viewM>12){cal._viewM=1;cal._viewY++;}
+  if(cal._viewM<1){cal._viewM=12;cal._viewY--;}
+  dtRenderHijriCal(fieldId);
+}
+// اختيار يوم هجري → تحويل لميلادي وحفظه في _g
+function dtPickHijri(fieldId,hy,hm,hd){
+  try{
+    const g=fromHijri(hy,hm,hd);
+    if(g&&!isNaN(g.getTime())){
+      const gEl=document.getElementById(fieldId+'_g');
+      if(gEl) gEl.value=g.toISOString().split('T')[0];
+    }
+  }catch(e){}
+  dtRefreshHijriDisplay(fieldId);
+  const cal=document.getElementById(fieldId+'_hcal');if(cal)cal.style.display='none';
+  dtUpdateMirror(fieldId);
+}
+// مزامنة وقت الهجري مع حقل الوقت الميلادي
+function dtSyncHijriTime(fieldId){
+  const ht=document.getElementById(fieldId+'_htime'),t=document.getElementById(fieldId+'_time');
+  if(ht&&t) t.value=ht.value;
 }
 function dtUpdateMirror(fieldId){
   const cal=document.getElementById(fieldId+'_cal')?.value;
@@ -13728,33 +13813,35 @@ function dtUpdateMirror(fieldId){
   const mirror=document.getElementById(fieldId+'_mirror');
   if(!mirror) return;
   if(cal==='h'){
-    // المعروض هجري، المرآة ميلادي
     if(gEl&&gEl.value){const d=new Date(gEl.value);mirror.innerHTML=`🌐 الميلادي: <b style="font-family:'JetBrains Mono'">${d.getDate()} ${AR_MONTHS_G[d.getMonth()]} ${d.getFullYear()}</b>`;}
     else mirror.innerHTML='';
   } else {
-    // المعروض ميلادي، المرآة هجري
     if(gEl&&gEl.value){try{const h=toHijri(new Date(gEl.value));if(h){mirror.innerHTML=`🌙 الهجري: <b style="font-family:'JetBrains Mono'">${h.d} ${AR_MONTHS_H[h.m-1]} ${h.y} هـ</b>`;}}catch(e){mirror.innerHTML='';}}
     else mirror.innerHTML='';
   }
 }
 function updateDtMirrorSafe(fieldId){try{dtUpdateMirror(fieldId);}catch(e){}}
-// قراءة القيمة كطابع زمني رقمي كنص ISO للتواريخ (للصلاحية). فارغ → ''
+// قراءة القيمة كنص ISO ميلادي (للصلاحية). فارغ → ''
 function readDateOnlyField(fieldId){
   const gEl=document.getElementById(fieldId+'_g');
   return gEl?.value||'';
 }
-// قراءة القيمة كطابع زمني رقمي (مع الوقت). فارغ → null (المُستدعي يضع Date.now())
+// قراءة القيمة كطابع زمني رقمي (مع الوقت). فارغ → null
 function readDateTimeField(fieldId){
-  const cal=document.getElementById(fieldId+'_cal')?.value;
   const gEl=document.getElementById(fieldId+'_g');
   let dateStr=gEl?.value||'';
   if(!dateStr) return null;
   let ts=new Date(dateStr).getTime();
   if(isNaN(ts)) return null;
-  // أضف الوقت إن وُجد
-  const timeEl=document.getElementById(fieldId+'_time');
-  if(timeEl&&timeEl.value){
-    const [h,m]=timeEl.value.split(':').map(Number);
+  // الوقت: من حقل الميلادي أو الهجري
+  const cal=document.getElementById(fieldId+'_cal')?.value;
+  let timeVal='';
+  const tEl=document.getElementById(fieldId+'_time');
+  const htEl=document.getElementById(fieldId+'_htime');
+  if(cal==='h'&&htEl&&htEl.value) timeVal=htEl.value;
+  else if(tEl&&tEl.value) timeVal=tEl.value;
+  if(timeVal){
+    const [h,m]=timeVal.split(':').map(Number);
     const d=new Date(ts);d.setHours(h||0,m||0,0,0);ts=d.getTime();
   }
   return ts;
