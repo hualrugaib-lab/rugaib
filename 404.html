@@ -1888,6 +1888,10 @@ body::after{
         </div>
         <div style="font-size:11px;color:#047857;margin-bottom:12px;line-height:1.6">أدخل تاريخ انتهاء التسجيل الفعلي. سيحسب النظام تاريخ اكتساب القطعية تلقائياً (بعد عام ميلادي كامل).</div>
         <div class="fg">
+          <label class="flbl" style="color:#065F46">🏠 رقم العقار</label>
+          <input type="text" class="finp" id="vmPropertyNumber" placeholder="مثال: 4069 أو RES-2026-0445" style="border-color:#6EE7B7;font-family:'JetBrains Mono'">
+        </div>
+        <div class="fg">
           <label class="flbl" style="color:#065F46">تاريخ انتهاء التسجيل الفعلي</label>
           <input type="date" class="finp" id="vmRegEndDate" onchange="updateQatiyyaPreview()" style="border-color:#6EE7B7">
         </div>
@@ -7031,11 +7035,55 @@ function renderAllTx(){
     if(parent && tx.includes(parent)) return false; // parent visible → child shown inline
     return true; // orphan child (parent filtered out) → show standalone
   });
-  document.getElementById('allTxList').innerHTML=topLevel.length
-    ? topLevel.map(txHtml).join('')
-    : `<p style="text-align:center;color:var(--sub);font-size:13px;padding:40px">لا توجد نتائج</p>`;
+  // ─── تجميع المعاملات حسب المشروع (شكل تحريري) — لا تأثير على المنطق ───
+  if(topLevel.length){
+    // ترتيب المشاريع: حسب أول ظهور للمعاملة (للحفاظ على ترتيب topLevel)
+    const projOrder=[];
+    const projMap=new Map();
+    topLevel.forEach(t=>{
+      const pc=t.projCode||'__none__';
+      if(!projMap.has(pc)){projMap.set(pc,[]);projOrder.push(pc);}
+      projMap.get(pc).push(t);
+    });
+    // ألوان المشاريع — مفهرسة على كود المشروع، 6 ألوان دوّارة
+    const projPalette=[
+      {pc:'#7C3AED',pcl:'#F5F3FF',pcLine:'#DDD6FE',pcShadow:'rgba(124,58,237,.20)'},
+      {pc:'#0E7490',pcl:'#ECFEFF',pcLine:'#A5F3FC',pcShadow:'rgba(14,116,144,.20)'},
+      {pc:'#C2410C',pcl:'#FFF7ED',pcLine:'#FED7AA',pcShadow:'rgba(194,65,12,.20)'},
+      {pc:'#065F46',pcl:'#ECFDF5',pcLine:'#A7F3D0',pcShadow:'rgba(6,95,70,.20)'},
+      {pc:'#BE185D',pcl:'#FDF2F8',pcLine:'#FBCFE8',pcShadow:'rgba(190,24,93,.20)'},
+      {pc:'#1E40AF',pcl:'#EFF6FF',pcLine:'#BFDBFE',pcShadow:'rgba(30,64,175,.20)'}
+    ];
+    // hash بسيط للمشروع لتثبيت لونه
+    const colorFor=(pc)=>{
+      let h=0;for(let i=0;i<pc.length;i++)h=(h*31+pc.charCodeAt(i))|0;
+      return projPalette[Math.abs(h)%projPalette.length];
+    };
+    let html='';
+    projOrder.forEach(pc=>{
+      const proj=projects.find(p=>p.code===pc);
+      const projName=proj?proj.name:(pc==='__none__'?'بلا مشروع':pc);
+      const projShort=pc==='__none__'?'—':pc.substring(0,3).toUpperCase();
+      const c=colorFor(pc);
+      const txs=projMap.get(pc);
+      html+=`<div class="proj-group" style="--pc:${c.pc};--pcl:${c.pcl};--pc-line:${c.pcLine};--pc-shadow:${c.pcShadow}">
+        <div class="proj-group-hdr">
+          <div class="proj-group-mark">${projShort}</div>
+          <div class="proj-group-info">
+            <div class="proj-group-name">${projName}</div>
+            <div class="proj-group-sub">${pc}</div>
+          </div>
+          <div class="proj-group-count">${String(txs.length).padStart(2,'0')} ${txs.length===1?'معاملة':'معاملات'}</div>
+        </div>
+        <div class="proj-group-list">${txs.map(txHtml).join('')}</div>
+      </div>`;
+    });
+    document.getElementById('allTxList').innerHTML=html;
+  } else {
+    document.getElementById('allTxList').innerHTML=`<p style="text-align:center;color:var(--sub);font-size:13px;padding:40px">لا توجد نتائج</p>`;
+  }
   // Staggered entrance animation
-  document.querySelectorAll('#allTxList>.tx-item').forEach((el,i)=>{
+  document.querySelectorAll('#allTxList .tx-item').forEach((el,i)=>{
     el.style.animation=`cardIn .3s cubic-bezier(.34,1.2,.64,1) ${i*40}ms both`;
   });
   // populate filters if empty
@@ -8057,6 +8105,8 @@ function openValidityModal(tx){
     const isRER=tx.issueCode==='RER';
     qatiyyaSection.style.display=isRER?'block':'none';
     if(isRER){
+      const propEl=document.getElementById('vmPropertyNumber');
+      if(propEl) propEl.value=tx.propertyNumber||'';
       const regEl=document.getElementById('vmRegEndDate');
       if(regEl) regEl.value=tx.registrationEndDate||'';
       updateQatiyyaPreview();
@@ -8216,6 +8266,8 @@ function saveValidityInfo(){
   }
   // حفظ بيانات القطعية لمعاملات التسجيل العيني (RER)
   if(tx.issueCode==='RER'){
+    const propNum=(document.getElementById('vmPropertyNumber')?.value||'').trim();
+    if(propNum) tx.propertyNumber=propNum;
     const regEnd=document.getElementById('vmRegEndDate')?.value;
     if(regEnd){
       tx.registrationEndDate=regEnd;
@@ -11532,11 +11584,14 @@ function renderRealEstate(){
     const elapsed=365-daysToQ,pct=Math.max(1,Math.min(100,(elapsed/365)*100));
     const trackBg=isImm?'#fef3c7':'#e2e8f0';
     const propStr=t.propertyNumber?` · 🏠 ${t.propertyNumber}`:'';
+    const propBadge=t.propertyNumber?`<span style="font-size:11px;background:rgba(15,118,110,.1);color:#0f766e;padding:3px 9px;border-radius:6px;font-weight:700;font-family:'JetBrains Mono';display:inline-flex;align-items:center;gap:4px">🏠 ${t.propertyNumber}</span>`:'';
+    const nameRow=(t.name&&t.name!==projName)?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:12.5px;color:#475569;font-weight:600;line-height:1.4">${t.name}</span>${propBadge}</div>`:(propBadge?`<div style="margin-bottom:6px">${propBadge}</div>`:'');
     const border=isImm?'border:2px solid rgba(245,158,11,.3)':'';
     return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;${GLASS};padding:20px;display:flex;align-items:center;gap:20px;${border}">
       <div style="width:64px;height:64px;border-radius:18px;background:${grad};display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">${icon}</div>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:16px;font-weight:800;color:#1e293b">${projName}</span>${badge}${corrBadge}<span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono'">${t.code}${propStr}</span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:16px;font-weight:800;color:#1e293b">${projName}</span>${badge}${corrBadge}<span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono'">${t.code}</span></div>
+        ${nameRow}
         <div style="display:flex;align-items:center;gap:12px"><div style="flex:1;height:8px;background:${trackBg};border-radius:4px;overflow:hidden"><div style="width:${pct.toFixed(0)}%;height:100%;background:${grad}"></div></div><span style="font-size:11px;color:${accent};font-weight:700;white-space:nowrap">القطعية: ${reFmtFull(Qd)}</span></div>
       </div>
       <div style="text-align:center;flex-shrink:0"><div style="font-size:28px;font-weight:900;color:${accent};font-family:'JetBrains Mono'">${daysToQ}</div><div style="font-size:9px;color:#94a3b8">يوم متبقٍ</div></div>
@@ -11545,11 +11600,13 @@ function renderRealEstate(){
   // بانورامية مكتمل
   const panelDone=(item)=>{
     const {t,Qd,projName}=item;
-    const propStr=t.propertyNumber?` · 🏠 ${t.propertyNumber}`:'';
+    const propBadge=t.propertyNumber?`<span style="font-size:11px;background:rgba(16,185,129,.12);color:#047857;padding:3px 9px;border-radius:6px;font-weight:700;font-family:'JetBrains Mono';display:inline-flex;align-items:center;gap:4px">🏠 ${t.propertyNumber}</span>`:'';
+    const nameRow=(t.name&&t.name!==projName)?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:12.5px;color:#475569;font-weight:600;line-height:1.4">${t.name}</span>${propBadge}</div>`:(propBadge?`<div style="margin-bottom:6px">${propBadge}</div>`:'');
     return `<div onclick="openTxDetail('${t.id}')" style="cursor:pointer;${GLASS};padding:20px;display:flex;align-items:center;gap:20px;background:linear-gradient(135deg,rgba(16,185,129,.08),rgba(255,255,255,.7))">
       <div style="width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#34D399,#10B981);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">🏆</div>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:16px;font-weight:800;color:#1e293b">${projName}</span><span style="font-size:10px;background:rgba(16,185,129,.15);color:#047857;padding:3px 10px;border-radius:20px;font-weight:700">🏆 اكتسب القطعية</span><span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono'">${t.code}${propStr}</span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:16px;font-weight:800;color:#1e293b">${projName}</span><span style="font-size:10px;background:rgba(16,185,129,.15);color:#047857;padding:3px 10px;border-radius:20px;font-weight:700">🏆 اكتسب القطعية</span><span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono'">${t.code}</span></div>
+        ${nameRow}
         <div style="font-size:11px;color:#047857;font-weight:600">✅ اكتملت القطعية بتاريخ ${reFmtFull(Qd)}</div>
       </div>
       <div style="text-align:center;flex-shrink:0"><div style="font-size:24px">✓</div><div style="font-size:9px;color:#047857;font-weight:700">مكتمل</div></div>
@@ -11558,13 +11615,15 @@ function renderRealEstate(){
   // بانورامية مرفوض
   const panelRejected=(item)=>{
     const {t,projName}=item;
-    const propStr=t.propertyNumber?` · 🏠 ${t.propertyNumber}`:'';
+    const propBadge=t.propertyNumber?`<span style="font-size:11px;background:rgba(239,68,68,.1);color:#dc2626;padding:3px 9px;border-radius:6px;font-weight:700;font-family:'JetBrains Mono';display:inline-flex;align-items:center;gap:4px">🏠 ${t.propertyNumber}</span>`:'';
+    const nameRow=(t.name&&t.name!==projName)?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:12.5px;color:#475569;font-weight:600;line-height:1.4">${t.name}</span>${propBadge}</div>`:(propBadge?`<div style="margin-bottom:6px">${propBadge}</div>`:'');
     const reason=t.rejectReason||'غير محدد';
     const rd=t.rejectDate?reFmtFull(new Date(t.rejectDate)):'—';
     return `<div style="${GLASS};padding:20px;display:flex;align-items:center;gap:20px;background:linear-gradient(135deg,rgba(239,68,68,.06),rgba(255,255,255,.7));border:2px solid rgba(239,68,68,.25)">
       <div onclick="openTxDetail('${t.id}')" style="cursor:pointer;width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#f87171,#dc2626);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">⚠️</div>
       <div onclick="openTxDetail('${t.id}')" style="cursor:pointer;flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:16px;font-weight:800;color:#1e293b">${projName}</span><span style="font-size:10px;background:rgba(239,68,68,.12);color:#dc2626;padding:3px 10px;border-radius:20px;font-weight:700">⚠️ مرفوض التسجيل</span><span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono'">${t.code}${propStr}</span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:16px;font-weight:800;color:#1e293b">${projName}</span><span style="font-size:10px;background:rgba(239,68,68,.12);color:#dc2626;padding:3px 10px;border-radius:20px;font-weight:700">⚠️ مرفوض التسجيل</span><span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono'">${t.code}</span></div>
+        ${nameRow}
         <div style="font-size:11px;color:#dc2626;font-weight:600;margin-bottom:4px">✕ سبب الرفض: ${reason}</div>
         <div style="font-size:10px;color:#94a3b8">رُفض بتاريخ: ${rd} — يتطلب المعالجة لإعادة التقديم</div>
       </div>
@@ -13688,6 +13747,83 @@ function exportSinglePDF(id){
   .tx-tl-date small{font-size:8px}
   .tx-tl-dot{right:41px;width:18px;height:18px;font-size:9px}
 }
+
+/* ════════════════════════════════════════════════════════════
+   صفحة المعاملات — التجميع التحريري حسب المشروع (شكل فقط)
+   ════════════════════════════════════════════════════════════ */
+#allTxList .proj-group{
+  background:#fff;
+  border:1px solid var(--border2);
+  border-radius:16px;
+  margin-bottom:18px;
+  overflow:hidden;
+  box-shadow:0 1px 2px rgba(11,25,41,.02),0 8px 28px -8px rgba(11,25,41,.06);
+  position:relative;
+  animation:projRise .5s cubic-bezier(.2,.8,.2,1) backwards;
+}
+#allTxList .proj-group::before{
+  content:'';position:absolute;top:0;right:0;bottom:0;width:3px;
+  background:var(--pc);
+}
+@keyframes projRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+#allTxList .proj-group:nth-child(1){animation-delay:.04s}
+#allTxList .proj-group:nth-child(2){animation-delay:.10s}
+#allTxList .proj-group:nth-child(3){animation-delay:.16s}
+#allTxList .proj-group:nth-child(4){animation-delay:.22s}
+#allTxList .proj-group:nth-child(n+5){animation-delay:.28s}
+
+#allTxList .proj-group-hdr{
+  display:flex;align-items:center;gap:14px;
+  padding:16px 22px;
+  background:linear-gradient(90deg,var(--pcl) 0%,transparent 70%);
+  border-bottom:1px solid var(--border2);
+  position:relative;
+}
+#allTxList .proj-group-mark{
+  width:36px;height:36px;border-radius:9px;
+  background:var(--pc);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:12px;
+  font-family:'JetBrains Mono',monospace;letter-spacing:-.02em;
+  flex-shrink:0;
+  box-shadow:0 2px 8px var(--pc-shadow);
+  position:relative;
+}
+#allTxList .proj-group-mark::after{
+  content:'';position:absolute;inset:-3px;
+  border:1px solid var(--pc);border-radius:11px;opacity:.18;
+}
+#allTxList .proj-group-info{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+#allTxList .proj-group-name{
+  font-family:'Tajawal',sans-serif;
+  font-size:15px;font-weight:800;
+  color:var(--text);letter-spacing:-.01em;
+}
+#allTxList .proj-group-sub{
+  font-family:'JetBrains Mono',monospace;
+  font-size:10.5px;color:var(--text3);
+  letter-spacing:.05em;
+}
+#allTxList .proj-group-count{
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;font-weight:600;color:var(--pc);
+  background:#fff;
+  padding:5px 12px;
+  border:1px solid var(--pc-line);
+  border-radius:20px;letter-spacing:.03em;
+  flex-shrink:0;
+}
+#allTxList .proj-group-list{padding:8px 12px 12px}
+#allTxList .proj-group-list>.tx-item{margin:6px 0 !important}
+
+/* تلوين شريط الجانب الأيمن للبطاقة بلون المشروع */
+#allTxList .proj-group .tx-item:not(.tx-child-item){
+  border-right:3px solid var(--pc-line) !important;
+}
+#allTxList .proj-group .tx-item:hover:not(.tx-child-item){
+  border-right-color:var(--pc) !important;
+}
+
 </style></head><body>
   <h1>${t.code} — ${t.name}</h1>
   <table><tr><th>البند</th><th>القيمة</th></tr>
