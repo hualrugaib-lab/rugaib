@@ -889,12 +889,23 @@ body::after{
 #allTxList .proj-group-list{padding:10px 14px 14px}
 #allTxList .proj-group-list>.tx-item{margin:8px 0 !important}
 
-/* تلوين شريط البطاقة الجانبي بلون المشروع */
+/* تلوين البطاقة بلون المشروع — خلفية فاتحة هادئة + شريط جانبي */
 #allTxList .proj-group .tx-item:not(.tx-child-item){
   border-right:3px solid var(--pc-line) !important;
+  background:var(--pcl) !important;
+  box-shadow:0 1px 2px rgba(11,25,41,.03),0 2px 8px -2px rgba(11,25,41,.04) !important;
+  transition:all .25s !important;
 }
 #allTxList .proj-group .tx-item:hover:not(.tx-child-item){
   border-right-color:var(--pc) !important;
+  background:#fff !important;
+  box-shadow:0 4px 14px var(--pc-shadow),0 2px 4px rgba(11,25,41,.04) !important;
+  transform:translateY(-1px) !important;
+}
+/* البطاقات الفرعية بلون أفتح إضافياً (مع شفافية) */
+#allTxList .proj-group .tx-child-item{
+  background:linear-gradient(180deg,rgba(255,255,255,.6),var(--pcl)) !important;
+  box-shadow:0 1px 2px rgba(11,25,41,.02) !important;
 }
 
 @media (max-width:720px){
