@@ -4920,6 +4920,21 @@ function collectAllAttachments(t){
   return out;
 }
 
+// المدير يعيد فتح أي معاملة منجزة
+function reopenTxByManager(txId){
+  const t=transactions.find(x=>x.id===txId);
+  if(!t) return;
+  if(!currentUser||currentUser.role!=='manager'){toast('🚫 المدير فقط يستطيع إعادة فتح المعاملة','er');return;}
+  if(!confirm('إعادة فتح هذه المعاملة وتغيير حالتها إلى "تحت الإجراء"؟')) return;
+  markTxOpen(t);
+  if(!t.steps) t.steps=[];
+  t.steps.push({type:'update',text:`🔓 أعاد المدير فتح المعاملة (${currentUser.name})`,status:'تحت الإجراء',ts:Date.now(),by:currentUser.name});
+  ss('v4_tx',transactions);
+  toast('تم إعادة فتح المعاملة','ok');
+  if(document.getElementById('mTxDetail')?.classList.contains('show')) openTxDetail(t.id);
+  if(typeof renderRealEstate==='function') renderRealEstate();
+}
+
 function markTxComplete(t){
   if(!t) return;
   t.status='منجزة';
@@ -7830,12 +7845,13 @@ function openTxDetail(id,openTab){
   }).join(''):`<p style="text-align:center;color:var(--sub);font-size:12px;padding:20px">لا توجد روابط مرفقة</p>`;
 
   // Footer
-  const isMan=currentUser.role==='manager';
-  const isViewer_ = currentUser.role === 'viewer';
+  const isMan=currentUser?.role==='manager';
+  const isViewer_ = currentUser?.role === 'viewer';
   const isEditorPlus_ = canEdit();
   document.getElementById('dtFooter').innerHTML=`
     <button class="btn bs" onclick="closeModal('mTxDetail')">إغلاق</button>
     ${(isEditorPlus_||canUpdateStatus()) ? `<button class="btn bs bsm" onclick="openAddStep('${t.id}')">⊕ تحديث</button>` : `<button class="btn bs bsm" onclick="openViewerNote('${t.id}')">📝 ملاحظة</button>`}
+    ${(isMan&&t.status==='منجزة') ? `<button class="btn bsm" onclick="reopenTxByManager('${t.id}')" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff;border:none;font-weight:700">🔓 إعادة فتح المعاملة</button>` : ''}
     ${(isEditorPlus_&&t.issueCode==='RER'&&!t.rerRejected) ? `<button class="btn bsm" onclick="openRejectRegistration('${t.id}')" style="background:rgba(239,68,68,.08);color:var(--danger);border:1px solid rgba(239,68,68,.25)">⚠️ رفض التسجيل</button>` : ''}
     <button class="btn bs bsm" onclick="startTimer('${t.id}','عمل على ${t.code}')" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none">▶ ابدأ المؤقت</button>
     ${isEditorPlus_ ? `<button class="btn bs bsm" onclick="openGovRefs('${t.id}')">📋 أرقام حكومية</button>` : ''}
@@ -7979,15 +7995,24 @@ function toggleStepComplete(txId,stepIdx){
   const isEditor=currentUser&&currentUser.role==='editor';
   const isAssignee=currentUser&&isAssigneeOf(t,currentUser.email);
   if(!isManager&&!isEditor&&!isAssignee){toast('🚫 ليس لديك صلاحية','er');return;}
-  t.steps[stepIdx].completed=!t.steps[stepIdx].completed;
-  if(t.steps[stepIdx].completed){
-    t.steps[stepIdx].status='منجزة';
-    t.steps[stepIdx].completedBy=currentUser.name;
-    t.steps[stepIdx].completedAt=Date.now();
+  const step=t.steps[stepIdx];
+  // منع تكرار الإنجاز: خطوة منجزة من شخص آخر لا يلمسها إلا المدير
+  if(step.completed){
+    const completedBySomeoneElse = step.completedBy && step.completedBy!==currentUser.name;
+    if(!isManager && completedBySomeoneElse){
+      toast(`🔒 هذه الخطوة أنجزها ${step.completedBy} — لا يمكن تعديلها (المدير فقط يعيد فتحها)`,'er');
+      return;
+    }
+  }
+  step.completed=!step.completed;
+  if(step.completed){
+    step.status='منجزة';
+    step.completedBy=currentUser.name;
+    step.completedAt=Date.now();
   } else {
-    t.steps[stepIdx].status='تحت الإجراء';
-    delete t.steps[stepIdx].completedBy;
-    delete t.steps[stepIdx].completedAt;
+    step.status='تحت الإجراء';
+    delete step.completedBy;
+    delete step.completedAt;
   }
   const allDone=t.steps.length>0&&t.steps.every(s=>s.completed);
   const wasNotDone=t.status!=='منجزة';
@@ -9140,15 +9165,30 @@ function buildTxTimelineHtml(txId){
     events.push({type:'create',label:'⊕ إنشاء المعاملة',text:t.purpose||'تم إنشاء المعاملة',by:t.ownerName||t.assignedByName||'النظام',timestamp:t.createdAt});
   }
   (t.steps||[]).forEach((s,si)=>{
-    let type='update',label='✎ تحديث';
-    if(s.type==='note'){type='note';label='💬 ملاحظة';}
-    else if(s.status==='منجزة'){type='done';label='✅ تم الإنجاز';}
-    else if(s.status){type='update';label=`✎ تحديث (${s.status})`;}
+    const stepText=s.text||s.note||'';
+    let type='update',label='✎ تحديث',displayText=stepText;
+    if(s.type==='note'){
+      type='note';label='💬 ملاحظة';displayText=stepText;
+    } else if(s.status==='منجزة'||s.completed){
+      // الخطوة المنجزة: العنوان يُظهر *ما الذي أُنجز* (نص الخطوة)، لا عبارة مجردة
+      type='done';
+      label = stepText ? `✅ ${stepText}` : '✅ تم الإنجاز';
+      displayText = ''; // النص صار في العنوان، لا نكرّره
+    } else if(s.status==='متأخرة'){
+      type='update';label=`🔴 ${stepText||'تحديث'}`;displayText='';
+    } else if(s.status==='موقوفة'){
+      type='update';label=`⏸ ${stepText||'تحديث'}`;displayText='';
+    } else if(s.status&&s.status!=='تحت الإجراء'){
+      type='update';label=`✎ ${stepText||'تحديث'} (${s.status})`;displayText='';
+    } else {
+      // تحت الإجراء أو بلا حالة: العنوان "تحديث" والنص هو التفاصيل
+      type='update';label='✎ تحديث';displayText=stepText;
+    }
     // طابع زمني: الرقمي أولاً، ثم تحويل آمن للتاريخ، وإلا تقدير حسب createdAt + ترتيب الخطوة
     let stepTs=s.ts||s.timestamp;
     if(!stepTs&&s.date&&!isNaN(new Date(s.date).getTime())) stepTs=new Date(s.date).getTime();
     if(!stepTs){ const base=t.createdAt||Date.now()-((t.steps.length-si)*60000); stepTs=base+(si+1)*60000; }
-    events.push({type,label,text:s.text||s.note||'',by:s.by||'مستخدم',timestamp:stepTs,status:s.status,attachments:s.attachments||[],govNum:s.govNum||''});
+    events.push({type,label,text:displayText,by:s.by||'مستخدم',timestamp:stepTs,status:s.status,attachments:s.attachments||[],govNum:s.govNum||'',completedBy:s.completedBy||''});
   });
   if(t.assignedAt&&t.assignee){
     const u=users.find(u=>u.email===t.assignee);
@@ -9180,8 +9220,8 @@ function buildTxTimelineHtml(txId){
   const canEdit=['manager','editor'].includes(role);
   const canUpdate=['manager','editor','liaison'].includes(role);
 
-  // Date formatter (Arabic, two-line)
-  const monthShort=['ينا','فبر','مار','أبر','مايو','يون','يول','أغس','سبت','أكت','نوف','ديس'];
+  // Date formatter (Arabic, two-line) — اسم الشهر كاملاً
+  const monthShort=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   const fmtDate=(ts)=>{
     if(!ts) return {top:'-',bottom:''};
     const d=new Date(ts);
@@ -9284,7 +9324,7 @@ function buildTxTimelineHtml(txId){
         ${ev.text?`<div style="color:#475569;font-size:11px;line-height:1.65">${ev.text}</div>`:''}
         ${ev.govNum?`<div style="margin-top:6px;display:inline-flex;align-items:center;gap:5px;background:var(--ind-dim);color:var(--indigo);padding:3px 9px;border-radius:6px;font-size:10px;font-weight:600">🏛️ رقم حكومي: <span style="font-family:'JetBrains Mono'">${ev.govNum}</span></div>`:''}
         ${attHtml}
-        <div style="font-size:10px;color:#94A3B8;margin-top:8px;padding-top:7px;border-top:1px dashed #F1F5F9;display:flex;align-items:center;gap:5px">👤 ${ev.by||'—'}</div>
+        <div style="font-size:10px;color:#94A3B8;margin-top:8px;padding-top:7px;border-top:1px dashed #F1F5F9;display:flex;align-items:center;gap:5px;flex-wrap:wrap">👤 ${ev.by||'—'}${ev.type==='done'&&ev.completedBy?` <span style="color:#059669;font-weight:600">• ✅ أنجزها: ${ev.completedBy}</span>`:''}</div>
       </div>
     </div>`;
   });
@@ -10255,9 +10295,31 @@ function openMapSide(code){
   document.getElementById('mapSideTitle').textContent=p.name;
   document.getElementById('mapSideCode').textContent=p.code;
   const tx=transactions.filter(t=>t.projCode===code);
-  document.getElementById('mapSideTxList').innerHTML=tx.length?tx.map(txHtml).join(''):`<p style="color:var(--sub);font-size:12px;text-align:center;padding:20px">لا توجد معاملات</p>`;
+  document.getElementById('mapSideTxList').innerHTML=tx.length?tx.map(mapTxCard).join(''):`<p style="color:var(--sub);font-size:12px;text-align:center;padding:20px">لا توجد معاملات</p>`;
   document.getElementById('mapSide').classList.add('open');
   if(theMap_&&p.lat&&p.lng) theMap_.setView([p.lat,p.lng],15,{animate:true});
+}
+// بطاقة معاملة في الخريطة — النقر يفتح التفاصيل الكاملة (خط الزمن + التحديث)
+function mapTxCard(t){
+  const spMap={'تحت الإجراء':'sp-ip','منجزة':'sp-dn','متأخرة':'sp-lt','موقوفة':'sp-hd','بانتظار الموافقة':'sp-pend'};
+  const statusKey=t.pendingApproval?'بانتظار الموافقة':t.status;
+  const issueName=allIssues().find(i=>i.code===t.issueCode)?.name||t.issueCode;
+  const stepCount=(t.steps||[]).length;
+  const m=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const created=t.createdAt?(()=>{const d=new Date(t.createdAt);return `${d.getDate()} ${m[d.getMonth()]} ${d.getFullYear()}`;})():'';
+  return `<div onclick="openTxDetail('${t.id}')" style="background:#fff;border:1px solid var(--border2);border-right:3px solid var(--indigo);border-radius:11px;padding:12px 14px;cursor:pointer;margin-bottom:9px;transition:all .2s" onmouseover="this.style.boxShadow='0 4px 16px rgba(79,70,229,.12)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='none';this.style.transform='none'">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+      <span class="tx-code" style="font-family:'JetBrains Mono';font-size:10px;font-weight:700;color:var(--indigo);background:var(--ind-dim);padding:2px 8px;border-radius:6px">${t.code}</span>
+      <span class="sp ${spMap[statusKey]||'sp-hd'}" style="font-size:10px">${statusKey}</span>
+    </div>
+    <div style="font-size:13px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:6px">${t.name}</div>
+    <div style="display:flex;align-items:center;gap:10px;font-size:10.5px;color:var(--text3);flex-wrap:wrap">
+      <span>📋 ${issueName}</span>
+      ${stepCount?`<span>📊 ${stepCount} حدث</span>`:''}
+      ${created?`<span>🗓 ${created}</span>`:''}
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--indigo);font-weight:600;display:flex;align-items:center;gap:4px">👁 اضغط لاستعراض المعاملة</div>
+  </div>`;
 }
 function closeMapSide(){document.getElementById('mapSide').classList.remove('open');if(theMap_) theMap_.setView([RYH.lat,RYH.lng],11,{animate:true});}
 function mapFitAll(){
