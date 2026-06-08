@@ -768,6 +768,142 @@ body::after{
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
+
+/* ════════════════════════════════════════════════════════════
+   صفحة المعاملات — التصميم التحريري المعتمد
+   - شريط الإحصائيات الأفقي بأرقام كبيرة JetBrains Mono
+   - بطاقات المشاريع بألوان مميّزة وتايبوغرافيا متعدّدة الطبقات
+   ════════════════════════════════════════════════════════════ */
+
+/* شريط الإحصائيات الأفقي */
+#pg-transactions .tx-stat-bar{
+  display:grid !important;
+  grid-template-columns:repeat(4,1fr) !important;
+  gap:0;
+  background:#fff;
+  border:1px solid var(--border2);
+  border-radius:14px;
+  overflow:hidden;
+  margin-bottom:18px;
+  box-shadow:0 1px 2px rgba(11,25,41,.02),0 4px 16px -4px rgba(11,25,41,.04);
+}
+#pg-transactions .tx-stat{
+  padding:18px 22px;
+  border-left:1px solid var(--border2);
+  position:relative;
+  transition:background .25s;
+}
+#pg-transactions .tx-stat:last-child{border-left:none}
+#pg-transactions .tx-stat:hover{background:#FAFBFC}
+#pg-transactions .tx-stat-lbl{
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;font-weight:500;
+  color:var(--text3);
+  letter-spacing:.15em;
+  text-transform:uppercase;
+  margin-bottom:6px;
+}
+#pg-transactions .tx-stat-val{
+  font-family:'JetBrains Mono',monospace !important;
+  font-size:28px !important;
+  font-weight:600;
+  color:var(--text);
+  line-height:1;
+  letter-spacing:-.02em;
+}
+#pg-transactions .tx-stat-val.acc{color:#0F766E}
+#pg-transactions .tx-stat-val.warn{color:#B45309}
+#pg-transactions .tx-stat-val.err{color:#B91C1C}
+#pg-transactions .tx-stat-trend{
+  font-size:10px;color:var(--text3);
+  margin-top:4px;
+  font-family:'Tajawal',sans-serif;
+}
+
+/* مجموعة المشروع — التصميم التحريري المعتمد */
+#pg-transactions #allTxList .proj-group{
+  background:#fff !important;
+  border:1px solid var(--border2) !important;
+  border-radius:18px !important;
+  margin-bottom:20px !important;
+  overflow:hidden;
+  box-shadow:0 1px 2px rgba(11,25,41,.02),0 8px 32px -8px rgba(11,25,41,.06) !important;
+  position:relative;
+  animation:projRise .5s cubic-bezier(.2,.8,.2,1) backwards;
+}
+#pg-transactions #allTxList .proj-group::before{
+  content:'';position:absolute;top:0;right:0;bottom:0;width:3px;
+  background:var(--pc);
+  transition:width .3s;
+}
+@keyframes projRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+#allTxList .proj-group:nth-child(1){animation-delay:.04s}
+#allTxList .proj-group:nth-child(2){animation-delay:.10s}
+#allTxList .proj-group:nth-child(3){animation-delay:.16s}
+#allTxList .proj-group:nth-child(4){animation-delay:.22s}
+#allTxList .proj-group:nth-child(5){animation-delay:.28s}
+#allTxList .proj-group:nth-child(n+6){animation-delay:.34s}
+
+/* رأس المشروع */
+#allTxList .proj-group-hdr{
+  display:flex;align-items:center;gap:14px;
+  padding:18px 26px;
+  background:linear-gradient(90deg,var(--pcl) 0%,transparent 70%);
+  border-bottom:1px solid var(--border-soft,#F0F3F7);
+  position:relative;
+}
+#allTxList .proj-group-mark{
+  width:36px;height:36px;border-radius:9px;
+  background:var(--pc);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:12px;
+  font-family:'JetBrains Mono',monospace;letter-spacing:-.02em;
+  flex-shrink:0;
+  box-shadow:0 2px 8px var(--pc-shadow);
+  position:relative;
+}
+#allTxList .proj-group-mark::after{
+  content:'';position:absolute;inset:-3px;
+  border:1px solid var(--pc);border-radius:11px;opacity:.18;
+}
+#allTxList .proj-group-info{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+#allTxList .proj-group-name{
+  font-family:'Tajawal',sans-serif;
+  font-size:15px;font-weight:800;
+  color:var(--text);letter-spacing:-.01em;
+}
+#allTxList .proj-group-sub{
+  font-family:'JetBrains Mono',monospace;
+  font-size:10.5px;color:var(--text3);
+  letter-spacing:.05em;
+}
+#allTxList .proj-group-count{
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;font-weight:600;color:var(--pc);
+  background:#fff;
+  padding:5px 12px;
+  border:1px solid var(--pc-line);
+  border-radius:20px;letter-spacing:.03em;
+  flex-shrink:0;
+}
+#allTxList .proj-group-list{padding:10px 14px 14px}
+#allTxList .proj-group-list>.tx-item{margin:8px 0 !important}
+
+/* تلوين شريط البطاقة الجانبي بلون المشروع */
+#allTxList .proj-group .tx-item:not(.tx-child-item){
+  border-right:3px solid var(--pc-line) !important;
+}
+#allTxList .proj-group .tx-item:hover:not(.tx-child-item){
+  border-right-color:var(--pc) !important;
+}
+
+@media (max-width:720px){
+  .tx-stat-bar{grid-template-columns:repeat(2,1fr)}
+  .tx-stat:nth-child(2){border-left:none}
+  .tx-stat:nth-child(1),.tx-stat:nth-child(2){border-bottom:1px solid var(--border2)}
+  .tx-stat-val{font-size:22px}
+}
+
 </style>
 </head>
 <body><!-- BUILD VERSION: 2026-05-17-FILTER-FIX-v2 -->
@@ -1000,6 +1136,14 @@ body::after{
           <button class="ins-tab" onclick="toggleInsight('employee')" data-ins="employee">👤 حسب الموظف</button>
         </div>
         <div id="insightPanels" style="margin-bottom:12px"></div>
+
+        <!-- شريط الإحصائيات التحريري -->
+        <div id="txStatBar" class="tx-stat-bar">
+          <div class="tx-stat"><div class="tx-stat-lbl">إجمالي</div><div class="tx-stat-val" id="txStatTotal">00</div><div class="tx-stat-trend">نشطة</div></div>
+          <div class="tx-stat"><div class="tx-stat-lbl">منجزة</div><div class="tx-stat-val acc" id="txStatDone">00</div><div class="tx-stat-trend" id="txStatDonePct">0%</div></div>
+          <div class="tx-stat"><div class="tx-stat-lbl">قيد الإجراء</div><div class="tx-stat-val warn" id="txStatInProgress">00</div><div class="tx-stat-trend">تتطلب متابعة</div></div>
+          <div class="tx-stat"><div class="tx-stat-lbl">متأخرة</div><div class="tx-stat-val err" id="txStatLate">00</div><div class="tx-stat-trend">إجراء عاجل</div></div>
+        </div>
 
         <div id="txUnlinkZone" ondragover="onUnlinkZoneDragOver(event)" ondragleave="onUnlinkZoneDragLeave(event)" ondrop="onUnlinkZoneDrop(event)">
         💥 اسحب وأفلت هنا لفصل المعاملة من سلسلة التجديد
@@ -7035,6 +7179,22 @@ function renderAllTx(){
     if(parent && tx.includes(parent)) return false; // parent visible → child shown inline
     return true; // orphan child (parent filtered out) → show standalone
   });
+  // تحديث شريط الإحصائيات التحريري
+  const sb=document.getElementById('txStatBar');
+  if(sb){
+    const totalCount=tx.length;
+    const doneCount=tx.filter(t=>t.status==='منجزة').length;
+    const lateCount=tx.filter(t=>t.status==='متأخرة').length;
+    const ipCount=tx.filter(t=>t.status==='تحت الإجراء').length;
+    const pct=totalCount?Math.round((doneCount/totalCount)*100):0;
+    const setVal=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+    setVal('txStatTotal',String(totalCount).padStart(2,'0'));
+    setVal('txStatDone',String(doneCount).padStart(2,'0'));
+    setVal('txStatInProgress',String(ipCount).padStart(2,'0'));
+    setVal('txStatLate',String(lateCount).padStart(2,'0'));
+    setVal('txStatDonePct',pct+'% من الإجمالي');
+  }
+
   // ─── تجميع المعاملات حسب المشروع (شكل تحريري) — لا تأثير على المنطق ───
   if(topLevel.length){
     // ترتيب المشاريع: حسب أول ظهور للمعاملة (للحفاظ على ترتيب topLevel)
@@ -7045,17 +7205,24 @@ function renderAllTx(){
       if(!projMap.has(pc)){projMap.set(pc,[]);projOrder.push(pc);}
       projMap.get(pc).push(t);
     });
-    // ألوان المشاريع — مفهرسة على كود المشروع، 6 ألوان دوّارة
+    // ألوان المشاريع — مطابقة للنموذج التحريري المعتمد
+    // التعيين الصريح للمشاريع المعروفة (HT بنفسجي، MN فيروزي، LAC برتقالي، KAD أخضر)
+    // والبقية تأخذ من جدول ألوان متبقّية مثبّت بـ hash
+    const explicitColors={
+      'HT':{pc:'#7C3AED',pcl:'#F5F3FF',pcLine:'#DDD6FE',pcShadow:'rgba(124,58,237,.25)'}, // بنفسجي
+      'MN':{pc:'#0E7490',pcl:'#ECFEFF',pcLine:'#A5F3FC',pcShadow:'rgba(14,116,144,.25)'}, // فيروزي
+      'LAC':{pc:'#C2410C',pcl:'#FFF7ED',pcLine:'#FED7AA',pcShadow:'rgba(194,65,12,.25)'}, // برتقالي
+      'KAD':{pc:'#065F46',pcl:'#ECFDF5',pcLine:'#A7F3D0',pcShadow:'rgba(6,95,70,.25)'}, // أخضر
+    };
     const projPalette=[
-      {pc:'#7C3AED',pcl:'#F5F3FF',pcLine:'#DDD6FE',pcShadow:'rgba(124,58,237,.20)'},
-      {pc:'#0E7490',pcl:'#ECFEFF',pcLine:'#A5F3FC',pcShadow:'rgba(14,116,144,.20)'},
-      {pc:'#C2410C',pcl:'#FFF7ED',pcLine:'#FED7AA',pcShadow:'rgba(194,65,12,.20)'},
-      {pc:'#065F46',pcl:'#ECFDF5',pcLine:'#A7F3D0',pcShadow:'rgba(6,95,70,.20)'},
-      {pc:'#BE185D',pcl:'#FDF2F8',pcLine:'#FBCFE8',pcShadow:'rgba(190,24,93,.20)'},
-      {pc:'#1E40AF',pcl:'#EFF6FF',pcLine:'#BFDBFE',pcShadow:'rgba(30,64,175,.20)'}
+      {pc:'#BE185D',pcl:'#FDF2F8',pcLine:'#FBCFE8',pcShadow:'rgba(190,24,93,.25)'}, // وردي
+      {pc:'#1E40AF',pcl:'#EFF6FF',pcLine:'#BFDBFE',pcShadow:'rgba(30,64,175,.25)'}, // أزرق
+      {pc:'#7C2D12',pcl:'#FEF2F2',pcLine:'#FECACA',pcShadow:'rgba(124,45,18,.25)'}, // كستنائي
+      {pc:'#3F6212',pcl:'#F7FEE7',pcLine:'#BEF264',pcShadow:'rgba(63,98,18,.25)'}  // زيتوني
     ];
-    // hash بسيط للمشروع لتثبيت لونه
+    // hash بسيط للمشروع لتثبيت لونه (للمشاريع غير المعرّفة صراحةً)
     const colorFor=(pc)=>{
+      if(explicitColors[pc]) return explicitColors[pc];
       let h=0;for(let i=0;i<pc.length;i++)h=(h*31+pc.charCodeAt(i))|0;
       return projPalette[Math.abs(h)%projPalette.length];
     };
@@ -13748,81 +13915,6 @@ function exportSinglePDF(id){
   .tx-tl-dot{right:41px;width:18px;height:18px;font-size:9px}
 }
 
-/* ════════════════════════════════════════════════════════════
-   صفحة المعاملات — التجميع التحريري حسب المشروع (شكل فقط)
-   ════════════════════════════════════════════════════════════ */
-#allTxList .proj-group{
-  background:#fff;
-  border:1px solid var(--border2);
-  border-radius:16px;
-  margin-bottom:18px;
-  overflow:hidden;
-  box-shadow:0 1px 2px rgba(11,25,41,.02),0 8px 28px -8px rgba(11,25,41,.06);
-  position:relative;
-  animation:projRise .5s cubic-bezier(.2,.8,.2,1) backwards;
-}
-#allTxList .proj-group::before{
-  content:'';position:absolute;top:0;right:0;bottom:0;width:3px;
-  background:var(--pc);
-}
-@keyframes projRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-#allTxList .proj-group:nth-child(1){animation-delay:.04s}
-#allTxList .proj-group:nth-child(2){animation-delay:.10s}
-#allTxList .proj-group:nth-child(3){animation-delay:.16s}
-#allTxList .proj-group:nth-child(4){animation-delay:.22s}
-#allTxList .proj-group:nth-child(n+5){animation-delay:.28s}
-
-#allTxList .proj-group-hdr{
-  display:flex;align-items:center;gap:14px;
-  padding:16px 22px;
-  background:linear-gradient(90deg,var(--pcl) 0%,transparent 70%);
-  border-bottom:1px solid var(--border2);
-  position:relative;
-}
-#allTxList .proj-group-mark{
-  width:36px;height:36px;border-radius:9px;
-  background:var(--pc);color:#fff;
-  display:flex;align-items:center;justify-content:center;
-  font-weight:700;font-size:12px;
-  font-family:'JetBrains Mono',monospace;letter-spacing:-.02em;
-  flex-shrink:0;
-  box-shadow:0 2px 8px var(--pc-shadow);
-  position:relative;
-}
-#allTxList .proj-group-mark::after{
-  content:'';position:absolute;inset:-3px;
-  border:1px solid var(--pc);border-radius:11px;opacity:.18;
-}
-#allTxList .proj-group-info{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
-#allTxList .proj-group-name{
-  font-family:'Tajawal',sans-serif;
-  font-size:15px;font-weight:800;
-  color:var(--text);letter-spacing:-.01em;
-}
-#allTxList .proj-group-sub{
-  font-family:'JetBrains Mono',monospace;
-  font-size:10.5px;color:var(--text3);
-  letter-spacing:.05em;
-}
-#allTxList .proj-group-count{
-  font-family:'JetBrains Mono',monospace;
-  font-size:11px;font-weight:600;color:var(--pc);
-  background:#fff;
-  padding:5px 12px;
-  border:1px solid var(--pc-line);
-  border-radius:20px;letter-spacing:.03em;
-  flex-shrink:0;
-}
-#allTxList .proj-group-list{padding:8px 12px 12px}
-#allTxList .proj-group-list>.tx-item{margin:6px 0 !important}
-
-/* تلوين شريط الجانب الأيمن للبطاقة بلون المشروع */
-#allTxList .proj-group .tx-item:not(.tx-child-item){
-  border-right:3px solid var(--pc-line) !important;
-}
-#allTxList .proj-group .tx-item:hover:not(.tx-child-item){
-  border-right-color:var(--pc) !important;
-}
 
 </style></head><body>
   <h1>${t.code} — ${t.name}</h1>
