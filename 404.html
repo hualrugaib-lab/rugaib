@@ -12558,110 +12558,225 @@ function generateOneClickReport(){
   const fromMs=from.getTime(),toMs=to.getTime();
 
   const arMonths=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-  const fmtAr=d=>`${d.getDate()} ${arMonths[d.getMonth()]} ${d.getFullYear()}`;
-  const fmtShort=ts=>{const d=new Date(ts);return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;};
+  const fmtFullDate=ts=>{const d=new Date(ts);return `${d.getDate()} ${arMonths[d.getMonth()]} ${d.getFullYear()}`;};
+  const fmtTitle=d=>`${d.getDate()} ${arMonths[d.getMonth()]} ${d.getFullYear()}`;
+
+  // أسماء الفترات لعرضها في عنوان التقرير
+  const periodTitles={month:'الشهر الحالي',quarter:'الربع الحالي',year:'السنة الحالية',all:'كل الفترات',custom:'الفترة المخصّصة'};
+  const periodTitle=periodTitles[period]||'الفترة';
 
   const baseTx=transactions.filter(t=>!t.hidden);
 
-  // 1) المهام المنجزة في الفترة (إنجاز مؤسسي — لا فردي)
-  const doneInPeriod=baseTx.filter(t=>{
-    if(!isTxDone(t)) return false;
-    const c=txCompletedAt(t);
-    return c&&c>=fromMs&&c<=toMs;
-  }).map(t=>({
-    code:t.code||'',
-    name:t.name||'—',
-    proj:projects.find(p=>p.code===t.projCode)?.name||t.proj||t.projCode||'—',
-    completedAt:txCompletedAt(t)
-  })).sort((a,b)=>b.completedAt-a.completedAt);
+  // ── ألوان المشاريع المعتمدة ──
+  const explicitColors={
+    'HT':{pc:'#7C3AED',pcl:'#F5F3FF',pcLine:'#DDD6FE',pcShadow:'rgba(124,58,237,.25)'},
+    'MN':{pc:'#0E7490',pcl:'#ECFEFF',pcLine:'#A5F3FC',pcShadow:'rgba(14,116,144,.25)'},
+    'LAC':{pc:'#C2410C',pcl:'#FFF7ED',pcLine:'#FED7AA',pcShadow:'rgba(194,65,12,.25)'},
+    'KAD':{pc:'#065F46',pcl:'#ECFDF5',pcLine:'#A7F3D0',pcShadow:'rgba(6,95,70,.25)'}
+  };
+  const fallbackPalette=[
+    {pc:'#BE185D',pcl:'#FDF2F8',pcLine:'#FBCFE8',pcShadow:'rgba(190,24,93,.25)'},
+    {pc:'#1E40AF',pcl:'#EFF6FF',pcLine:'#BFDBFE',pcShadow:'rgba(30,64,175,.25)'},
+    {pc:'#7C2D12',pcl:'#FEF2F2',pcLine:'#FECACA',pcShadow:'rgba(124,45,18,.25)'},
+    {pc:'#3F6212',pcl:'#F7FEE7',pcLine:'#BEF264',pcShadow:'rgba(63,98,18,.25)'}
+  ];
+  const colorFor=(pc)=>{
+    if(explicitColors[pc]) return explicitColors[pc];
+    let h=0;for(let i=0;i<pc.length;i++)h=(h*31+pc.charCodeAt(i))|0;
+    return fallbackPalette[Math.abs(h)%fallbackPalette.length];
+  };
 
-  // 2) الصكوك التي اكتسبت القطعية في الفترة
-  const qatiyyaInPeriod=baseTx.filter(t=>{
-    if(t.issueCode!=='RER'||!t.qatiyyaDate) return false;
-    const q=new Date(t.qatiyyaDate).getTime();
-    return q>=fromMs&&q<=toMs;
-  }).map(t=>({
-    code:t.code||'',
-    proj:projects.find(p=>p.code===t.projCode)?.name||t.proj||t.projCode||'—',
-    qatiyyaDate:new Date(t.qatiyyaDate)
-  })).sort((a,b)=>a.qatiyyaDate-b.qatiyyaDate);
+  // ── استخراج خطوات معاملة ضمن الفترة (بصياغة احترافية، بلا "تم إسناد...") ──
+  // تستبعد رسائل النظام التلقائية وتترك فقط الخطوات الموضوعية ذات المعنى
+  const exclusionPatterns=[
+    /تم إسناد/i,/تم تفعيل المعاملة/i,/تم إنشاء/i,/أعاد المدير فتح/i,
+    /تغيير الحالة/i,/🔓/,/🔒/,/💬/
+  ];
+  const stepsInPeriod=(t)=>{
+    if(!Array.isArray(t.steps)) return [];
+    return t.steps.filter(s=>{
+      const ts=s.ts||(s.date?new Date(s.date).getTime():null);
+      if(!ts||ts<fromMs||ts>toMs) return false;
+      const txt=String(s.text||'').trim();
+      if(!txt) return false;
+      // استبعاد الرسائل التلقائية والنظامية
+      if(exclusionPatterns.some(rx=>rx.test(txt))) return false;
+      return true;
+    }).map(s=>({
+      ts:s.ts||new Date(s.date).getTime(),
+      text:String(s.text).replace(/^[✎✅🔴⏸💬🔓🔒]\s*/,'').trim()
+    })).sort((a,b)=>a.ts-b.ts);
+  };
 
-  // 3) المشاريع النشطة (لها معاملة غير منجزة)
-  const activeProjs=new Set(baseTx.filter(t=>!isTxDone(t)).map(t=>projects.find(p=>p.code===t.projCode&&!p.parentCode)?.code||t.projCode)).size;
+  // ── تجميع المعاملات حسب المشروع ──
+  const projGroups={};
+  baseTx.forEach(t=>{
+    const pc=t.projCode||'__none__';
+    if(!projGroups[pc]) projGroups[pc]={code:pc,name:projects.find(p=>p.code===pc)?.name||pc,qatiyya:[],inProgress:[],done:[]};
+    // قطعية في الفترة
+    if(t.issueCode==='RER'&&t.qatiyyaDate){
+      const q=new Date(t.qatiyyaDate).getTime();
+      if(q>=fromMs&&q<=toMs){
+        projGroups[pc].qatiyya.push({name:t.name||'—',propertyNumber:t.propertyNumber||'',qatiyyaDate:q});
+      }
+    }
+    // منجزة في الفترة
+    if(isTxDone(t)){
+      const c=txCompletedAt(t);
+      if(c&&c>=fromMs&&c<=toMs){
+        projGroups[pc].done.push({name:t.name||'—',completedAt:c,steps:stepsInPeriod(t)});
+      }
+    } else {
+      // قيد التنفيذ: لها تحديث في الفترة أو حالة نشطة
+      const stepsP=stepsInPeriod(t);
+      const lastTs=stepsP.length?stepsP[stepsP.length-1].ts:0;
+      // ضمّن المعاملة إن: لها خطوة في الفترة، أو حالتها متأخرة/تحت الإجراء وأُنشئت قبل toMs
+      const createdMs=t.createdAt||0;
+      const isActive=(t.status==='تحت الإجراء'||t.status==='متأخرة'||t.status==='موقوفة');
+      if(stepsP.length>0||(isActive&&createdMs<=toMs)){
+        projGroups[pc].inProgress.push({name:t.name||'—',status:t.status||'تحت الإجراء',lastUpdate:lastTs||createdMs,steps:stepsP});
+      }
+    }
+  });
 
-  // بناء صفوف الجداول
-  const doneRows=doneInPeriod.length?doneInPeriod.map(r=>`
-    <tr><td style="font-family:'JetBrains Mono';color:#6366F1;font-size:10px;padding:7px 10px;border-bottom:1px solid #F1F5F9">${r.code}</td>
-    <td style="color:#0F172A;padding:7px 10px;border-bottom:1px solid #F1F5F9">${r.name}</td>
-    <td style="color:#64748B;padding:7px 10px;border-bottom:1px solid #F1F5F9">${r.proj}</td>
-    <td style="font-family:'JetBrains Mono';color:#64748B;padding:7px 10px;border-bottom:1px solid #F1F5F9">${fmtShort(r.completedAt)}</td></tr>
-  `).join(''):`<tr><td colspan="4" style="text-align:center;color:#94A3B8;padding:18px;font-style:italic">لا مهام منجزة في هذه الفترة</td></tr>`;
+  // إزالة المشاريع الفارغة + ترتيب
+  const projList=Object.values(projGroups).filter(p=>p.qatiyya.length||p.inProgress.length||p.done.length);
+  projList.forEach(p=>{
+    p.qatiyya.sort((a,b)=>b.qatiyyaDate-a.qatiyyaDate);
+    p.inProgress.sort((a,b)=>b.lastUpdate-a.lastUpdate);
+    p.done.sort((a,b)=>b.completedAt-a.completedAt);
+  });
 
-  const qatiyyaRows=qatiyyaInPeriod.length?qatiyyaInPeriod.map(r=>`
-    <tr><td style="color:#0F172A;font-weight:600;padding:7px 10px;border-bottom:1px solid #F1F5F9">${r.proj}</td>
-    <td style="font-family:'JetBrains Mono';color:#059669;font-size:10px;padding:7px 10px;border-bottom:1px solid #F1F5F9">${r.code}</td>
-    <td style="font-family:'JetBrains Mono';color:#64748B;padding:7px 10px;border-bottom:1px solid #F1F5F9">${fmtAr(r.qatiyyaDate)}</td></tr>
-  `).join(''):`<tr><td colspan="3" style="text-align:center;color:#94A3B8;padding:18px;font-style:italic">لا صكوك اكتسبت القطعية في هذه الفترة</td></tr>`;
-
-  const genDate=new Date();
-  const periodLabel=period==='all'?'جميع الأوقات':`${fmtAr(from)} — ${fmtAr(to)}`;
-
-  // نافذة الطباعة
-  const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>التقرير التنفيذي — سرايا</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=JetBrains+Mono&display=swap');
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'IBM Plex Sans Arabic',sans-serif;direction:rtl;background:#F1F5F9;padding:24px;color:#0F172A}
-    .report{max-width:840px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.12)}
-    .rhead{background:linear-gradient(135deg,#1E293B,#0F172A);padding:26px 30px;display:flex;align-items:center;justify-content:space-between}
-    .rhead h1{font-size:21px;color:#fff;font-weight:800}
-    .rhead .period{font-size:12px;color:#94A3B8;margin-top:4px}
-    .summary{padding:22px 30px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;border-bottom:1px solid #F1F5F9}
-    .sbox{text-align:center;border-radius:11px;padding:16px}
-    .sbox .num{font-size:30px;font-weight:800;font-family:'JetBrains Mono'}
-    .sbox .lbl{font-size:11px;font-weight:600;margin-top:3px}
-    .section{padding:18px 30px}
-    .section h2{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:7px}
-    table{width:100%;border-collapse:collapse;font-size:11.5px}
-    thead th{padding:9px 10px;text-align:right;font-weight:700}
-    .rfoot{background:#F8FAFC;padding:14px 30px;border-top:1px solid #F1F5F9;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94A3B8}
-    .note{font-size:10px;color:#94A3B8;text-align:center;margin-top:8px;font-style:italic}
-    @media print{body{background:#fff;padding:0}.report{box-shadow:none;border-radius:0}.noprint{display:none!important}}
-    .printbtn{position:fixed;top:20px;left:20px;background:linear-gradient(135deg,#34D399,#059669);color:#fff;border:none;border-radius:9px;padding:11px 20px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(5,150,105,.3);z-index:100}
-  </style></head><body>
-  <button class="printbtn noprint" onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
-  <div class="report">
-    <div class="rhead">
-      <div><h1>التقرير التنفيذي</h1><div class="period">الفترة: ${periodLabel}</div></div>
-      <div style="text-align:left">
-        <svg width="46" height="46" viewBox="0 0 160 160"><circle cx="80" cy="80" r="76" fill="rgba(255,255,255,.1)"/><path d="M 112 52 L 112 58 Q 112 64 106 64 L 60 64 Q 52 64 52 72 L 52 78 Q 52 86 60 86 L 106 86 Q 112 86 112 92 L 112 98 Q 112 104 106 104 L 48 104" stroke="#fff" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="112" cy="52" r="7" fill="#6366F1"/><circle cx="48" cy="104" r="7" fill="#10B981"/></svg>
-        <div style="font-size:10px;color:#CBD5E1;margin-top:4px">الرقيب القابضة</div>
+  // ── إنشاء بطاقة معاملة قيد التنفيذ ──
+  const txInProgressHtml=(tx)=>{
+    const stPill=tx.status==='متأخرة'
+      ? '<span style="font-size:9.5px;padding:3px 9px;border-radius:5px;background:#FEF2F2;color:#991B1B;font-weight:600">متأخرة</span>'
+      : tx.status==='موقوفة'
+      ? '<span style="font-size:9.5px;padding:3px 9px;border-radius:5px;background:#F1F5F9;color:#475569;font-weight:600">موقوفة</span>'
+      : '<span style="font-size:9.5px;padding:3px 9px;border-radius:5px;background:#FFFBEB;color:#92400E;font-weight:600">تحت الإجراء</span>';
+    const stepsHtml=tx.steps.length
+      ? '<div style="padding:0 14px 12px 36px;display:flex;flex-direction:column;gap:5px">'
+        + tx.steps.map(s=>`<div style="display:flex;align-items:flex-start;gap:10px;font-size:11px;color:#475569;line-height:1.55;position:relative;padding-right:16px"><span style="position:absolute;right:4px;top:7px;width:5px;height:5px;border-radius:50%;background:#0F766E;opacity:.5"></span><span style="font-family:'JetBrains Mono';font-size:10px;color:#7A8899;flex-shrink:0;font-weight:600;min-width:96px;text-align:left">${fmtFullDate(s.ts)}</span><span style="flex:1">${s.text}</span></div>`).join('')
+        + '</div>'
+      : '<div style="padding:0 14px 12px 36px;font-size:11px;color:#94A3B8;font-style:italic">لا توجد خطوات مسجّلة خلال الفترة</div>';
+    return `<div style="border:1px solid #F0F3F7;border-radius:8px;margin-bottom:8px;background:#FAFBFC">
+      <div style="display:flex;align-items:flex-start;padding:12px 14px;gap:14px">
+        <div style="flex:1;min-width:0"><div style="font-weight:700;color:#0B1929;font-size:13px;line-height:1.4">${tx.name}</div></div>
+        <div style="flex-shrink:0;padding-top:2px">${stPill}</div>
+        <div style="flex-shrink:0;text-align:left;padding-top:2px">
+          <div style="font-size:9px;color:#7A8899;font-weight:500;margin-bottom:2px">آخر تحديث</div>
+          <div style="font-family:'JetBrains Mono';font-size:10.5px;color:#0F766E;font-weight:600;white-space:nowrap">${fmtFullDate(tx.lastUpdate)}</div>
+        </div>
       </div>
+      ${stepsHtml}
+    </div>`;
+  };
+
+  // ── إنشاء بطاقة معاملة منجزة ──
+  const txDoneHtml=(tx)=>{
+    const stepsHtml=tx.steps.length
+      ? '<div style="padding:0 14px 12px 36px;display:flex;flex-direction:column;gap:5px">'
+        + tx.steps.map(s=>`<div style="display:flex;align-items:flex-start;gap:10px;font-size:11px;color:#475569;line-height:1.55;position:relative;padding-right:16px"><span style="position:absolute;right:4px;top:7px;width:5px;height:5px;border-radius:50%;background:#0F766E;opacity:.5"></span><span style="font-family:'JetBrains Mono';font-size:10px;color:#7A8899;flex-shrink:0;font-weight:600;min-width:96px;text-align:left">${fmtFullDate(s.ts)}</span><span style="flex:1">${s.text}</span></div>`).join('')
+        + '</div>'
+      : '';
+    return `<div style="border:1px solid #F0F3F7;border-radius:8px;margin-bottom:8px;background:#FAFBFC">
+      <div style="display:flex;align-items:flex-start;padding:12px 14px;gap:14px">
+        <div style="flex:1;min-width:0"><div style="font-weight:700;color:#0B1929;font-size:13px;line-height:1.4">${tx.name}</div></div>
+        <div style="flex-shrink:0;padding-top:2px"><span style="font-size:9.5px;padding:3px 9px;border-radius:5px;background:#ECFDF5;color:#065F46;font-weight:600">منجزة</span></div>
+        <div style="flex-shrink:0;text-align:left;padding-top:2px">
+          <div style="font-size:9px;color:#7A8899;font-weight:500;margin-bottom:2px">أُنجزت في</div>
+          <div style="font-family:'JetBrains Mono';font-size:10.5px;color:#0F766E;font-weight:600;white-space:nowrap">${fmtFullDate(tx.completedAt)}</div>
+        </div>
+      </div>
+      ${stepsHtml}
+    </div>`;
+  };
+
+  // ── إنشاء صف قطعية ──
+  const qatiyyaRow=(q)=>{
+    const prop=q.propertyNumber?`<span style="font-family:'JetBrains Mono';font-size:10px;color:#C2410C;background:#fff;padding:2px 8px;border-radius:5px;border:1px solid #FED7AA;font-weight:600;margin-right:8px">🏠 ${q.propertyNumber}</span>`:'';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#FFF7ED;border-radius:8px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:12px"><span style="font-size:13px;font-weight:700;color:#0B1929">${q.name}</span>${prop}</div>
+      <div><div style="font-size:9px;color:#7A8899;text-align:left;margin-bottom:2px">تاريخ القطعية</div><span style="font-family:'JetBrains Mono';font-size:11px;color:#C2410C;font-weight:700">${fmtFullDate(q.qatiyyaDate)}</span></div>
+    </div>`;
+  };
+
+  // ── إنشاء HTML لكل مشروع ──
+  const projBlockHtml=(p)=>{
+    const c=colorFor(p.code);
+    const sections=[];
+    if(p.qatiyya.length) sections.push(`<div style="padding:14px 22px;border-bottom:1px solid #F0F3F7"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;font-weight:700;color:#475569"><div style="width:22px;height:22px;border-radius:6px;background:#FFF7ED;color:#C2410C;display:flex;align-items:center;justify-content:center;font-size:11px">🏆</div><span>الصكوك المكتسبة قطعية</span><span style="margin-right:auto;font-family:'JetBrains Mono';font-size:10px;color:#7A8899;font-weight:500">${String(p.qatiyya.length).padStart(2,'0')} ${p.qatiyya.length===1?'صك':'صكوك'}</span></div>${p.qatiyya.map(qatiyyaRow).join('')}</div>`);
+    if(p.inProgress.length) sections.push(`<div style="padding:14px 22px;border-bottom:1px solid #F0F3F7"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;font-weight:700;color:#475569"><div style="width:22px;height:22px;border-radius:6px;background:#FFFBEB;color:#92400E;display:flex;align-items:center;justify-content:center;font-size:11px">⏱</div><span>الأعمال قيد التنفيذ</span><span style="margin-right:auto;font-family:'JetBrains Mono';font-size:10px;color:#7A8899;font-weight:500">${String(p.inProgress.length).padStart(2,'0')} ${p.inProgress.length===1?'معاملة':'معاملات'}</span></div>${p.inProgress.map(txInProgressHtml).join('')}</div>`);
+    if(p.done.length) sections.push(`<div style="padding:14px 22px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;font-weight:700;color:#475569"><div style="width:22px;height:22px;border-radius:6px;background:#ECFDF5;color:#065F46;display:flex;align-items:center;justify-content:center;font-size:11px">✓</div><span>الأعمال المنجزة خلال الفترة</span><span style="margin-right:auto;font-family:'JetBrains Mono';font-size:10px;color:#7A8899;font-weight:500">${String(p.done.length).padStart(2,'0')} ${p.done.length===1?'معاملة':'معاملات'}</span></div>${p.done.map(txDoneHtml).join('')}</div>`);
+
+    // عدّادات في رأس المشروع
+    const counts=[];
+    if(p.qatiyya.length) counts.push(`<span style="font-family:'JetBrains Mono';font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:#fff;border:1px solid ${c.pcLine};color:${c.pc}">${String(p.qatiyya.length).padStart(2,'0')} قطعية</span>`);
+    if(p.inProgress.length) counts.push(`<span style="font-family:'JetBrains Mono';font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:#fff;border:1px solid ${c.pcLine};color:${c.pc}">${String(p.inProgress.length).padStart(2,'0')} قيد التنفيذ</span>`);
+    if(p.done.length) counts.push(`<span style="font-family:'JetBrains Mono';font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:#fff;border:1px solid ${c.pcLine};color:${c.pc}">${String(p.done.length).padStart(2,'0')} منجزة</span>`);
+
+    return `<div style="margin-bottom:24px;border:1px solid #E5EAF0;border-radius:12px;overflow:hidden;position:relative;page-break-inside:avoid"><div style="position:absolute;top:0;right:0;bottom:0;width:3px;background:${c.pc}"></div>
+      <div style="display:flex;align-items:center;gap:14px;padding:16px 22px;background:linear-gradient(90deg,${c.pcl} 0%,transparent 70%);border-bottom:1px solid #E5EAF0">
+        <div style="width:34px;height:34px;border-radius:8px;background:${c.pc};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;font-family:'JetBrains Mono';flex-shrink:0;box-shadow:0 2px 8px ${c.pcShadow}">${p.code.substring(0,3).toUpperCase()}</div>
+        <div style="flex:1;min-width:0"><div style="font-family:'Tajawal',sans-serif;font-size:16px;font-weight:800;color:#0B1929">${p.name}</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${counts.join('')}</div>
+      </div>${sections.join('')}</div>`;
+  };
+
+  // ── بناء HTML الكامل ──
+  const w=window.open('','_blank');
+  if(!w){toast('السماح بالنوافذ المنبثقة مطلوب','er');return;}
+  const genDate=new Date();
+  const totalProjects=projList.length;
+  const totalQatiyya=projList.reduce((s,p)=>s+p.qatiyya.length,0);
+  const totalInProgress=projList.reduce((s,p)=>s+p.inProgress.length,0);
+  const totalDone=projList.reduce((s,p)=>s+p.done.length,0);
+
+  w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>التقرير التنفيذي — ${fmtTitle(from)} حتى ${fmtTitle(to)}</title>
+  <style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Tajawal:wght@400;500;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;font-family:'IBM Plex Sans Arabic','Tajawal',sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{background:#F5F7FA;padding:30px 24px;direction:rtl;color:#0B1929;line-height:1.5}
+  .report{background:#fff;border-radius:14px;padding:36px;max-width:920px;margin:0 auto;box-shadow:0 1px 2px rgba(11,25,41,.02),0 8px 32px -8px rgba(11,25,41,.06)}
+  .r-hdr{display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:20px;border-bottom:2px solid #0F766E;margin-bottom:24px;flex-wrap:wrap;gap:16px}
+  .r-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;color:#0F766E;letter-spacing:.18em;text-transform:uppercase;margin-bottom:8px}
+  .r-title{font-family:'Tajawal',sans-serif;font-size:28px;font-weight:900;line-height:1.1}
+  .r-title em{font-style:normal;color:#0F766E}
+  .r-period{font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A8899;text-align:left}
+  .r-period b{display:block;color:#0B1929;font-size:13px;font-weight:600;margin-top:2px}
+  .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid #E5EAF0;border-radius:12px;overflow:hidden;margin-bottom:24px}
+  .sbox{padding:14px 16px;border-left:1px solid #E5EAF0;text-align:center}
+  .sbox:last-child{border-left:none}
+  .num{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;line-height:1}
+  .lbl{font-size:10px;color:#7A8899;margin-top:4px}
+  .empty{text-align:center;padding:40px;color:#94A3B8;font-size:13px;background:#FAFBFC;border:1px dashed #CBD5E1;border-radius:12px}
+  .rfoot{margin-top:24px;padding-top:16px;border-top:1px solid #F0F3F7;display:flex;justify-content:space-between;font-family:'JetBrains Mono';font-size:10px;color:#7A8899}
+  @media print{body{background:#fff;padding:0}.report{box-shadow:none;border-radius:0;max-width:100%;padding:24px}}
+  .print-btn{position:fixed;top:20px;left:20px;background:linear-gradient(135deg,#14B8A6,#0F766E);color:#fff;border:none;padding:10px 18px;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(20,184,166,.4);z-index:100}
+  @media print{.print-btn{display:none}}
+  </style></head><body>
+  <button class="print-btn" onclick="window.print()">🖨 طباعة / حفظ PDF</button>
+  <div class="report">
+    <div class="r-hdr">
+      <div>
+        <div class="r-eyebrow">SARAYA · التقرير التنفيذي</div>
+        <div class="r-title">تقرير <em>${periodTitle}</em></div>
+      </div>
+      <div class="r-period">الفترة<b>${fmtTitle(from)} — ${fmtTitle(to)}</b></div>
     </div>
+
     <div class="summary">
-      <div class="sbox" style="background:#ECFDF5"><div class="num" style="color:#059669">${doneInPeriod.length}</div><div class="lbl" style="color:#047857">معاملة منجزة</div></div>
-      <div class="sbox" style="background:#EEF2FF"><div class="num" style="color:#6366F1">${qatiyyaInPeriod.length}</div><div class="lbl" style="color:#4338CA">صك اكتسب القطعية</div></div>
-      <div class="sbox" style="background:#FEF3C7"><div class="num" style="color:#D97706">${activeProjs}</div><div class="lbl" style="color:#B45309">مشاريع نشطة</div></div>
+      <div class="sbox"><div class="num" style="color:#C2410C">${String(totalQatiyya).padStart(2,'0')}</div><div class="lbl">قطعية مكتسبة</div></div>
+      <div class="sbox"><div class="num" style="color:#92400E">${String(totalInProgress).padStart(2,'0')}</div><div class="lbl">قيد التنفيذ</div></div>
+      <div class="sbox"><div class="num" style="color:#065F46">${String(totalDone).padStart(2,'0')}</div><div class="lbl">منجزة</div></div>
+      <div class="sbox"><div class="num">${String(totalProjects).padStart(2,'0')}</div><div class="lbl">مشاريع</div></div>
     </div>
-    <div class="section">
-      <h2>✅ المهام المنجزة في الفترة</h2>
-      <table>
-        <thead><tr style="background:#0F172A;color:#fff"><th style="border-radius:0 7px 7px 0">الكود</th><th>المعاملة</th><th>المشروع</th><th style="border-radius:7px 0 0 7px">تاريخ الإنجاز</th></tr></thead>
-        <tbody>${doneRows}</tbody>
-      </table>
-      <div class="note">إنجاز مؤسسي — بدون نسبته لشخص محدّد</div>
-    </div>
-    <div class="section">
-      <h2>⚖️ الصكوك التي اكتسبت القطعية</h2>
-      <table>
-        <thead><tr style="background:#059669;color:#fff"><th style="border-radius:0 7px 7px 0">المشروع</th><th>كود المعاملة</th><th style="border-radius:7px 0 0 7px">تاريخ اكتساب القطعية</th></tr></thead>
-        <tbody>${qatiyyaRows}</tbody>
-      </table>
-    </div>
+
+    ${projList.length?projList.map(projBlockHtml).join(''):'<div class="empty">لا توجد بيانات في الفترة المختارة</div>'}
+
     <div class="rfoot">
-      <span>تم التوليد آلياً من نظام سرايا — الرقيب القابضة</span>
-      <span style="font-family:'JetBrains Mono'">${fmtAr(genDate)} · ${String(genDate.getHours()).padStart(2,'0')}:${String(genDate.getMinutes()).padStart(2,'0')}</span>
+      <span>سرايا · نظام إدارة المعاملات والمهام — الرقيب القابضة</span>
+      <span>تاريخ الإصدار: ${fmtFullDate(genDate.getTime())} · ${String(genDate.getHours()).padStart(2,'0')}:${String(genDate.getMinutes()).padStart(2,'0')}</span>
     </div>
   </div>
   </body></html>`);
