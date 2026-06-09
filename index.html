@@ -533,6 +533,7 @@ body::after{
 .qa-btn:active{transform:translateY(0);box-shadow:inset 3px 3px 7px rgba(0,0,0,.18)}
 .qa-primary{background:linear-gradient(135deg,#7C3AED,#6D28D9)}
 .qa-blue{background:linear-gradient(135deg,#3B82F6,#2563EB)}
+.qa-teal{background:linear-gradient(135deg,#14B8A6,#0F766E)}
 .qa-amber{background:linear-gradient(135deg,#FBBF24,#F59E0B)}
 .qa-navy{background:linear-gradient(135deg,#1E293B,#0F172A)}
 .qa-secondary{background:#EEF0F4;color:#475569;box-shadow:inset 3px 3px 7px #c5c9d2,inset -3px -3px 7px #ffffff}
@@ -1557,6 +1558,50 @@ body::after{
 <!-- ══════════════ MODALS ══════════════════════════════════════ -->
 
 <!-- ADD/EDIT PROJECT -->
+<!-- ══ نافذة التقرير التنفيذي (من الصفحة الرئيسية) ══ -->
+<div class="mb" id="mExecReport">
+  <div class="modal" style="max-width:520px">
+    <div class="mhdr">
+      <div><h2>📊 التقرير التنفيذي</h2><p>اختر الفترة المطلوب إصدار التقرير عنها</p></div>
+      <button class="mclose" onclick="closeModal('mExecReport')">✕</button>
+    </div>
+    <div class="mbody">
+      <div class="fg">
+        <label class="flbl">الفترة</label>
+        <select class="finp" id="execRepPeriod" onchange="toggleExecRepCustom()">
+          <option value="month">الشهر الحالي</option>
+          <option value="quarter">الربع الحالي</option>
+          <option value="year">السنة الحالية</option>
+          <option value="all">كل الفترات</option>
+          <option value="custom">فترة مخصّصة</option>
+        </select>
+      </div>
+      <div id="execRepCustomRow" style="display:none;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="fg">
+          <label class="flbl">من تاريخ</label>
+          <input type="date" class="finp" id="execRepFrom">
+        </div>
+        <div class="fg">
+          <label class="flbl">إلى تاريخ</label>
+          <input type="date" class="finp" id="execRepTo">
+        </div>
+      </div>
+      <div style="background:#ECFEFF;border:1px solid #A5F3FC;border-radius:10px;padding:12px 14px;font-size:12px;color:#0F766E;line-height:1.6;margin-top:8px">
+        💡 يُولّد التقرير ملفاً قابلاً للطباعة أو الحفظ كـ PDF، يعرض:
+        <ul style="margin:6px 18px 0;padding:0;font-size:11.5px">
+          <li>الصكوك المكتسبة قطعية في الفترة</li>
+          <li>الأعمال قيد التنفيذ مع خطواتها</li>
+          <li>الأعمال المنجزة خلال الفترة</li>
+        </ul>
+      </div>
+    </div>
+    <div class="mfooter">
+      <button class="btn bs" onclick="closeModal('mExecReport')">إلغاء</button>
+      <button class="btn bp" onclick="runExecReport()">📊 إصدار التقرير</button>
+    </div>
+  </div>
+</div>
+
 <div class="mb" id="mProj">
   <div class="modal">
     <div class="mhdr"><div><h2 id="mProjTitle">مشروع جديد</h2><p>أدخل بيانات المشروع</p></div><button class="mclose" onclick="closeModal('mProj')">✕</button></div>
@@ -6049,6 +6094,7 @@ function renderDash(){
         // Manager: full access
         dashActions.innerHTML=`
           <button class="qa-btn qa-primary ripple" onclick="openCreateTx()">+ معاملة جديدة</button>
+          <button class="qa-btn qa-teal ripple" onclick="openExecReportModal()">📊 التقرير التنفيذي</button>
           <button class="qa-btn qa-blue ripple" onclick="openAddProj()">+ مشروع جديد</button>
           <button class="qa-btn qa-amber ripple" onclick="goPage('map')">🗺️ الخريطة</button>
           <button class="qa-btn qa-navy ripple" onclick="exportAllXLSX()">↓ تصدير Excel</button>`;
@@ -6056,12 +6102,14 @@ function renderDash(){
         // Editor: can create transactions AND projects
         dashActions.innerHTML=`
           <button class="qa-btn qa-primary ripple" onclick="openCreateTx()">+ معاملة جديدة</button>
+          <button class="qa-btn qa-teal ripple" onclick="openExecReportModal()">📊 التقرير التنفيذي</button>
           <button class="qa-btn qa-blue ripple" onclick="openAddProj()">+ مشروع جديد</button>
           <button class="qa-btn qa-amber ripple" onclick="goPage('map')">🗺️ الخريطة</button>
           <button class="qa-btn qa-navy ripple" onclick="exportAllXLSX()">↓ تصدير Excel</button>`;
       } else if(role==='viewer'){
-        // Viewer: only view actions
+        // Viewer: view + report access
         dashActions.innerHTML=`
+          <button class="qa-btn qa-teal ripple" onclick="openExecReportModal()">📊 التقرير التنفيذي</button>
           <button class="qa-btn qa-amber ripple" onclick="goPage('map')">🗺️ الخريطة</button>
           <button class="qa-btn qa-navy ripple" onclick="exportAllXLSX()">↓ تصدير Excel</button>`;
       }
@@ -12449,6 +12497,53 @@ function alertRemoveValidity(id){
 // ════════════════════════════════════════════════════════════
 // ONE-CLICK EXECUTIVE REPORT (التقرير التنفيذي بنقرة)
 // ════════════════════════════════════════════════════════════
+// ── نافذة التقرير التنفيذي من الصفحة الرئيسية ──
+function openExecReportModal(){
+  const periodEl=document.getElementById('execRepPeriod');
+  if(periodEl) periodEl.value='month';
+  const customRow=document.getElementById('execRepCustomRow');
+  if(customRow) customRow.style.display='none';
+  // تعبئة افتراضية للفترة المخصّصة (آخر 90 يوم)
+  const now=new Date();
+  const ago=new Date(now.getTime()-90*86400000);
+  const fmt=d=>d.toISOString().split('T')[0];
+  const fromEl=document.getElementById('execRepFrom');
+  const toEl=document.getElementById('execRepTo');
+  if(fromEl&&!fromEl.value) fromEl.value=fmt(ago);
+  if(toEl&&!toEl.value) toEl.value=fmt(now);
+  openModal('mExecReport');
+}
+function toggleExecRepCustom(){
+  const val=document.getElementById('execRepPeriod')?.value;
+  const row=document.getElementById('execRepCustomRow');
+  if(!row) return;
+  row.style.display=val==='custom'?'grid':'none';
+}
+function runExecReport(){
+  // نسخ القيم إلى عناصر التقرير الأصلية (repPeriod/repFrom/repTo) ثم استدعاء generateOneClickReport
+  const period=document.getElementById('execRepPeriod')?.value||'month';
+  const from=document.getElementById('execRepFrom')?.value;
+  const to=document.getElementById('execRepTo')?.value;
+  let repPeriod=document.getElementById('repPeriod');
+  let repFrom=document.getElementById('repFrom');
+  let repTo=document.getElementById('repTo');
+  // إن لم تكن عناصر التقرير موجودة (لأن صفحة التقارير لم تُفتح)، أنشئها مؤقتاً
+  if(!repPeriod){
+    repPeriod=document.createElement('select');repPeriod.id='repPeriod';repPeriod.style.display='none';
+    document.body.appendChild(repPeriod);
+    ['month','quarter','year','all','custom'].forEach(v=>{const o=document.createElement('option');o.value=v;repPeriod.appendChild(o);});
+  }
+  if(!repFrom){repFrom=document.createElement('input');repFrom.type='date';repFrom.id='repFrom';repFrom.style.display='none';document.body.appendChild(repFrom);}
+  if(!repTo){repTo=document.createElement('input');repTo.type='date';repTo.id='repTo';repTo.style.display='none';document.body.appendChild(repTo);}
+  repPeriod.value=period;
+  repFrom.value=from||'';
+  repTo.value=to||'';
+  closeModal('mExecReport');
+  // استدعاء التقرير الأصلي
+  try{ generateOneClickReport(); }
+  catch(e){ toast('تعذّر إصدار التقرير: '+e.message,'er'); }
+}
+
 function generateOneClickReport(){
   // قراءة الفترة من منتقي صفحة التقارير
   const period=document.getElementById('repPeriod')?.value||'all';
