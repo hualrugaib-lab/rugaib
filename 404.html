@@ -10101,6 +10101,7 @@ function saveGovRefs(){
 let stepForId=null;
 function openAddStep(id){
   stepForId=id;
+  window._addStepMode = 'update'; // علم: هذا تحديث عادي
   const t=transactions.find(x=>x.id===id);
   if(!t) return;
   const noteEl=document.getElementById('stepNote');if(noteEl)noteEl.value='';
@@ -10143,16 +10144,17 @@ function saveStep(){
   // التاريخ: يدوي إن أُدخل، وإلا تلقائي من النظام
   const manualTs=(typeof readDateTimeField==='function')?readDateTimeField('stepDate'):null;
   const stepTs=manualTs||Date.now();
-  // Type='update' = an information update, NOT a workflow milestone
+  // تمييز الملاحظة عن التحديث: الملاحظة لا تغيّر حالة المعاملة وتظهر كـ"💬 ملاحظة"
+  const isNoteMode = (window._addStepMode === 'note');
   const step={
-    type:'update',
+    type: isNoteMode ? 'note' : 'update',
     text:note,
     date:now_(),
     ts:stepTs,
     by:currentUser.name,
     byEmail:currentUser.email,
     note:'',
-    status:nst||t.status
+    status: isNoteMode ? t.status : (nst||t.status)
   };
   if(pendingReason&&nst==='بانتظار رد جهة خارجية'){
     step.pendingReason=pendingReason;
@@ -10969,6 +10971,7 @@ function renderEmpView(){
 // ── Viewer: add note only ──────────────────────────────────
 function openViewerNote(txId){
   stepForId = txId;
+  window._addStepMode = 'note'; // علم: هذه ملاحظة لا تحديث حالة
   document.getElementById('stepNote').value='';
   document.getElementById('stepSt').value='';
   document.getElementById('stepSt').disabled=true;
@@ -12586,25 +12589,34 @@ function generateOneClickReport(){
     return fallbackPalette[Math.abs(h)%fallbackPalette.length];
   };
 
-  // ── استخراج خطوات معاملة ضمن الفترة (بصياغة احترافية، بلا "تم إسناد...") ──
-  // تستبعد رسائل النظام التلقائية وتترك فقط الخطوات الموضوعية ذات المعنى
+  // ── استخراج خطوات معاملة ضمن الفترة (الإجراءات الموضوعية فقط) ──
+  // تُستبعد فقط الرسائل النظامية البحتة (لا أي إجراء فعلي ذي معنى)
   const exclusionPatterns=[
-    /تم إسناد/i,/تم تفعيل المعاملة/i,/تم إنشاء/i,/أعاد المدير فتح/i,
-    /تغيير الحالة/i,/🔓/,/🔒/,/💬/
+    /^تم إسناد/i,/^تم تفعيل المعاملة وإسناد/i,/^تم إنشاء المعاملة/i,
+    /أعاد المدير فتح المعاملة/i,/^تغيير الحالة:/i,
+    /^🔓/,/^🔒/
   ];
+  // خطوات الفترة (موضوعية، ضمن النطاق الزمني)
   const stepsInPeriod=(t)=>{
     if(!Array.isArray(t.steps)) return [];
-    return t.steps.filter(s=>{
-      const ts=s.ts||(s.date?new Date(s.date).getTime():null);
-      if(!ts||ts<fromMs||ts>toMs) return false;
-      const txt=String(s.text||'').trim();
+    return t.steps.map((s,si)=>{
+      // طابع زمني آمن: ts الرقمي، ثم date، ثم تقدير حسب الترتيب
+      let ts=s.ts||(s.date&&!isNaN(new Date(s.date).getTime())?new Date(s.date).getTime():null);
+      if(!ts){ const base=t.createdAt||Date.now(); ts=base+(si+1)*60000; }
+      return {ts,raw:s,si};
+    }).filter(o=>{
+      // ضمن الفترة
+      if(o.ts<fromMs||o.ts>toMs) return false;
+      const txt=String(o.raw.text||o.raw.note||'').trim();
       if(!txt) return false;
-      // استبعاد الرسائل التلقائية والنظامية
+      // استبعاد الرسائل النظامية البحتة فقط
       if(exclusionPatterns.some(rx=>rx.test(txt))) return false;
       return true;
-    }).map(s=>({
-      ts:s.ts||new Date(s.date).getTime(),
-      text:String(s.text).replace(/^[✎✅🔴⏸💬🔓🔒]\s*/,'').trim()
+    }).map(o=>({
+      ts:o.ts,
+      text:String(o.raw.text||o.raw.note).replace(/^[✎✅🔴⏸💬🔓🔒]\s*/,'').trim(),
+      isNote:o.raw.type==='note',
+      by:o.raw.by||''
     })).sort((a,b)=>a.ts-b.ts);
   };
 
@@ -12613,6 +12625,7 @@ function generateOneClickReport(){
   baseTx.forEach(t=>{
     const pc=t.projCode||'__none__';
     if(!projGroups[pc]) projGroups[pc]={code:pc,name:projects.find(p=>p.code===pc)?.name||pc,qatiyya:[],inProgress:[],done:[]};
+    const createdMs=t.createdAt||0;
     // قطعية في الفترة
     if(t.issueCode==='RER'&&t.qatiyyaDate){
       const q=new Date(t.qatiyyaDate).getTime();
@@ -12624,17 +12637,23 @@ function generateOneClickReport(){
     if(isTxDone(t)){
       const c=txCompletedAt(t);
       if(c&&c>=fromMs&&c<=toMs){
-        projGroups[pc].done.push({name:t.name||'—',completedAt:c,steps:stepsInPeriod(t)});
+        projGroups[pc].done.push({name:t.name||'—',completedAt:c,createdAt:createdMs,steps:stepsInPeriod(t)});
       }
     } else {
-      // قيد التنفيذ: لها تحديث في الفترة أو حالة نشطة
+      // قيد التنفيذ: تظهر كل معاملة نشطة أُنشئت قبل نهاية الفترة (حتى بلا تحديث في الفترة)
       const stepsP=stepsInPeriod(t);
       const lastTs=stepsP.length?stepsP[stepsP.length-1].ts:0;
-      // ضمّن المعاملة إن: لها خطوة في الفترة، أو حالتها متأخرة/تحت الإجراء وأُنشئت قبل toMs
-      const createdMs=t.createdAt||0;
-      const isActive=(t.status==='تحت الإجراء'||t.status==='متأخرة'||t.status==='موقوفة');
-      if(stepsP.length>0||(isActive&&createdMs<=toMs)){
-        projGroups[pc].inProgress.push({name:t.name||'—',status:t.status||'تحت الإجراء',lastUpdate:lastTs||createdMs,steps:stepsP});
+      const isActive=(t.status==='تحت الإجراء'||t.status==='متأخرة'||t.status==='موقوفة'||t.status==='بانتظار رد جهة خارجية'||!t.status);
+      // المعيار: معاملة نشطة أُنشئت قبل نهاية الفترة — تظهر سواء كان لها تحديث أم لا
+      if(isActive&&createdMs<=toMs){
+        projGroups[pc].inProgress.push({
+          name:t.name||'—',
+          status:t.status||'تحت الإجراء',
+          lastUpdate:lastTs||createdMs,
+          createdAt:createdMs,
+          hasUpdatesInPeriod:stepsP.length>0,
+          steps:stepsP
+        });
       }
     }
   });
@@ -12643,7 +12662,12 @@ function generateOneClickReport(){
   const projList=Object.values(projGroups).filter(p=>p.qatiyya.length||p.inProgress.length||p.done.length);
   projList.forEach(p=>{
     p.qatiyya.sort((a,b)=>b.qatiyyaDate-a.qatiyyaDate);
-    p.inProgress.sort((a,b)=>b.lastUpdate-a.lastUpdate);
+    // المتأخرة أولاً، ثم حسب آخر تحديث
+    p.inProgress.sort((a,b)=>{
+      const aLate=a.status==='متأخرة'?1:0, bLate=b.status==='متأخرة'?1:0;
+      if(aLate!==bLate) return bLate-aLate;
+      return b.lastUpdate-a.lastUpdate;
+    });
     p.done.sort((a,b)=>b.completedAt-a.completedAt);
   });
 
@@ -12654,17 +12678,20 @@ function generateOneClickReport(){
       : tx.status==='موقوفة'
       ? '<span style="font-size:9.5px;padding:3px 9px;border-radius:5px;background:#F1F5F9;color:#475569;font-weight:600">موقوفة</span>'
       : '<span style="font-size:9.5px;padding:3px 9px;border-radius:5px;background:#FFFBEB;color:#92400E;font-weight:600">تحت الإجراء</span>';
+    const stepLine=(s)=>{
+      const dot=s.isNote?'#C2410C':'#0F766E';
+      const tag=s.isNote?'<span style="font-size:8.5px;background:#FFF7ED;color:#C2410C;padding:1px 5px;border-radius:4px;font-weight:600;margin-left:5px">ملاحظة</span>':'';
+      return `<div style="display:flex;align-items:flex-start;gap:10px;font-size:11px;color:#475569;line-height:1.55;position:relative;padding-right:16px"><span style="position:absolute;right:4px;top:7px;width:5px;height:5px;border-radius:50%;background:${dot};opacity:.6"></span><span style="font-family:'JetBrains Mono';font-size:10px;color:#7A8899;flex-shrink:0;font-weight:600;min-width:96px;text-align:left">${fmtFullDate(s.ts)}</span><span style="flex:1">${s.text}${tag}</span></div>`;
+    };
     const stepsHtml=tx.steps.length
-      ? '<div style="padding:0 14px 12px 36px;display:flex;flex-direction:column;gap:5px">'
-        + tx.steps.map(s=>`<div style="display:flex;align-items:flex-start;gap:10px;font-size:11px;color:#475569;line-height:1.55;position:relative;padding-right:16px"><span style="position:absolute;right:4px;top:7px;width:5px;height:5px;border-radius:50%;background:#0F766E;opacity:.5"></span><span style="font-family:'JetBrains Mono';font-size:10px;color:#7A8899;flex-shrink:0;font-weight:600;min-width:96px;text-align:left">${fmtFullDate(s.ts)}</span><span style="flex:1">${s.text}</span></div>`).join('')
-        + '</div>'
-      : '<div style="padding:0 14px 12px 36px;font-size:11px;color:#94A3B8;font-style:italic">لا توجد خطوات مسجّلة خلال الفترة</div>';
+      ? '<div style="padding:0 14px 12px 36px;display:flex;flex-direction:column;gap:5px">'+tx.steps.map(stepLine).join('')+'</div>'
+      : `<div style="padding:0 14px 12px 36px;font-size:10.5px;color:#94A3B8;font-style:italic">لا توجد إجراءات جديدة خلال الفترة — المعاملة قائمة منذ ${fmtFullDate(tx.createdAt)}</div>`;
     return `<div style="border:1px solid #F0F3F7;border-radius:8px;margin-bottom:8px;background:#FAFBFC">
       <div style="display:flex;align-items:flex-start;padding:12px 14px;gap:14px">
         <div style="flex:1;min-width:0"><div style="font-weight:700;color:#0B1929;font-size:13px;line-height:1.4">${tx.name}</div></div>
         <div style="flex-shrink:0;padding-top:2px">${stPill}</div>
         <div style="flex-shrink:0;text-align:left;padding-top:2px">
-          <div style="font-size:9px;color:#7A8899;font-weight:500;margin-bottom:2px">آخر تحديث</div>
+          <div style="font-size:9px;color:#7A8899;font-weight:500;margin-bottom:2px">${tx.hasUpdatesInPeriod?'آخر تحديث':'تاريخ الإنشاء'}</div>
           <div style="font-family:'JetBrains Mono';font-size:10.5px;color:#0F766E;font-weight:600;white-space:nowrap">${fmtFullDate(tx.lastUpdate)}</div>
         </div>
       </div>
@@ -14444,8 +14471,10 @@ function readDateTimeField(fieldId){
   const gEl=document.getElementById(fieldId+'_g');
   let dateStr=gEl?.value||'';
   if(!dateStr) return null;
-  let ts=new Date(dateStr).getTime();
-  if(isNaN(ts)) return null;
+  // فكّ التاريخ يدوياً لتجنّب تفسير UTC (الذي يسبب إزاحة 3 ساعات في توقيت السعودية)
+  const dparts=dateStr.split('-').map(Number);
+  if(dparts.length!==3||dparts.some(isNaN)) return null;
+  const [yy,mm,dd]=dparts;
   // الوقت: من حقل الميلادي أو الهجري
   const cal=document.getElementById(fieldId+'_cal')?.value;
   let timeVal='';
@@ -14453,11 +14482,18 @@ function readDateTimeField(fieldId){
   const htEl=document.getElementById(fieldId+'_htime');
   if(cal==='h'&&htEl&&htEl.value) timeVal=htEl.value;
   else if(tEl&&tEl.value) timeVal=tEl.value;
+  let d;
   if(timeVal){
+    // وقت مُختار: استخدمه
     const [h,m]=timeVal.split(':').map(Number);
-    const d=new Date(ts);d.setHours(h||0,m||0,0,0);ts=d.getTime();
+    d=new Date(yy,mm-1,dd,h||0,m||0,0,0);
+  } else {
+    // لا وقت مُختار: خذ وقت النظام الحالي (الساعة/الدقيقة/الثانية الآن)
+    const nowT=new Date();
+    d=new Date(yy,mm-1,dd,nowT.getHours(),nowT.getMinutes(),nowT.getSeconds(),0);
   }
-  return ts;
+  const ts=d.getTime();
+  return isNaN(ts)?null:ts;
 }
 
 function now_(){return new Date().toLocaleDateString('ar-SA');}
