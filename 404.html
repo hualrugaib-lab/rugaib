@@ -17,7 +17,7 @@
 <meta name="background-color" content="#0F172A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="سرايا">
+<meta name="apple-mobile-web-app-title" content="إدارة المعاملات">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
@@ -919,6 +919,48 @@ body::after{
 </style>
 </head>
 <body><!-- BUILD VERSION: 2026-05-17-FILTER-FIX-v2 -->
+<!-- ═══════════════════════════════════════════════════════════════════
+     ★★★ لوغو الشركة — مكان التخصيص الوحيد ★★★
+     ─────────────────────────────────────────────────────────────────
+     المنفّذ: لتغيير اللوغو، استبدل قيمة COMPANY_LOGO_SRC أدناه فقط.
+     
+     طريقتان:
+     (١) رابط مباشر:  const COMPANY_LOGO_SRC = 'logo.png';
+         (ضع ملف logo.png بجانب index.html في نفس المجلد)
+     
+     (٢) صورة مضمّنة (data URI) — الأفضل لأنها لا تحتاج ملفاً منفصلاً:
+         const COMPANY_LOGO_SRC = 'data:image/png;base64,iVBOR...';
+         (حوّل الصورة إلى base64 من موقع مثل base64-image.de والصقها هنا)
+     
+     • اترك القيمة فارغة ('') لإبقاء الشعار الافتراضي (الأيقونة الحالية).
+     • يظهر اللوغو تلقائياً في: الشريط العلوي + شاشة الدخول.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+  const COMPANY_LOGO_SRC = ''; // ← ضع هنا رابط اللوغو أو data URI (اتركه فارغاً للشعار الافتراضي)
+  
+  function applyCompanyLogo(){
+    if(!COMPANY_LOGO_SRC) return; // لا لوغو مخصّص → إبقاء الافتراضي
+    // (١) الشريط العلوي
+    const tbLogo=document.querySelector('.tb-logo');
+    if(tbLogo){
+      tbLogo.innerHTML=`<img src="${COMPANY_LOGO_SRC}" alt="شعار الشركة" style="width:100%;height:100%;object-fit:contain;border-radius:8px" onerror="this.parentElement.classList.add('logo-fallback')">`;
+      tbLogo.style.background='transparent';
+      tbLogo.style.boxShadow='none';
+      tbLogo.style.padding='2px';
+    }
+    // (٢) شاشة الدخول
+    const lcLogo=document.querySelector('.lc-logo');
+    if(lcLogo){
+      lcLogo.innerHTML=`<img src="${COMPANY_LOGO_SRC}" alt="شعار الشركة">`;
+    }
+  }
+  // تطبيق عند تحميل الصفحة
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',applyCompanyLogo);
+  } else {
+    applyCompanyLogo();
+  }
+</script>
 
 <!-- ══ LOGIN ═════════════════════════════════════════════════ -->
 <div id="loginScreen">
@@ -12786,7 +12828,7 @@ function generateOneClickReport(){
   <div class="report">
     <div class="r-hdr">
       <div>
-        <div class="r-eyebrow">SARAYA · التقرير التنفيذي</div>
+        <div class="r-eyebrow">نظام إدارة المعاملات · الرقيب القابضة</div>
         <div class="r-title">تقرير <em>${periodTitle}</em></div>
       </div>
       <div class="r-period">الفترة<b>${fmtTitle(from)} — ${fmtTitle(to)}</b></div>
@@ -12802,7 +12844,7 @@ function generateOneClickReport(){
     ${projList.length?projList.map(projBlockHtml).join(''):'<div class="empty">لا توجد بيانات في الفترة المختارة</div>'}
 
     <div class="rfoot">
-      <span>سرايا · نظام إدارة المعاملات والمهام — الرقيب القابضة</span>
+      <span>نظام إدارة المعاملات والمهام — الرقيب القابضة</span>
       <span>تاريخ الإصدار: ${fmtFullDate(genDate.getTime())} · ${String(genDate.getHours()).padStart(2,'0')}:${String(genDate.getMinutes()).padStart(2,'0')}</span>
     </div>
   </div>
