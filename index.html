@@ -3066,6 +3066,29 @@ function mergeTimeEntries(local, remote){
   });
 }
 
+// CRITICAL FIX: Merge incoming Firestore transactions with local instead of
+// replacing wholesale. Prevents a newly-created/updated transaction from being
+// silently erased when a stale real-time snapshot arrives before the local
+// save has propagated (same class of bug fixed above for time entries).
+function mergeTransactions(local, remote){
+  if(!Array.isArray(local)) local=[];
+  if(!Array.isArray(remote)) remote=[];
+  const merged=new Map();
+  // Add all local first (covers items not yet pushed to the server)
+  local.forEach(t=>{if(t&&t.id) merged.set(t.id,t);});
+  // Then merge remote - prefer whichever side was modified more recently
+  remote.forEach(t=>{
+    if(!t||!t.id) return;
+    const existing=merged.get(t.id);
+    if(!existing){merged.set(t.id,t);return;}
+    const localTime=existing.modifiedAt||existing.createdAt||0;
+    const remoteTime=t.modifiedAt||t.createdAt||0;
+    if(remoteTime>=localTime) merged.set(t.id,t);
+  });
+  // Preserve the original "newest first" ordering produced by unshift() on creation
+  return Array.from(merged.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+}
+
 // Get pending writes lock - prevent listener from overwriting during a save
 window._pendingTimeEntryWrites=new Set();
 
@@ -5795,30 +5818,34 @@ async function doLogin(){
   // Setup real-time Firebase listeners for live sync
   if(window.fbListen){
     window.fbListen('v4_tx',data=>{
-      if(data&&Array.isArray(data)&&JSON.stringify(data)!==JSON.stringify(transactions)){
-        transactions=data;
-        localStorage.setItem('v4_tx',JSON.stringify(transactions));
-        console.log('🔄 Transactions updated from another device — refreshing all pages');
-        // Refresh ALL active pages
-        if(typeof renderDash==='function') renderDash();
-        const txPg=document.getElementById('pg-transactions');
-        if(txPg&&txPg.classList.contains('active')&&typeof renderAllTx==='function') renderAllTx();
-        const projPg=document.getElementById('pg-projects');
-        if(projPg&&projPg.classList.contains('active')&&typeof renderProjGrid==='function') renderProjGrid();
-        const ttPg=document.getElementById('pg-timetrack');
-        if(ttPg&&ttPg.classList.contains('active')&&typeof renderTimeReport==='function') renderTimeReport();
-        // ALERTS page — critical fix!
-        const alertsPg=document.getElementById('pg-alerts');
-        if(alertsPg&&alertsPg.classList.contains('active')&&typeof renderAlerts==='function') renderAlerts();
-        // Reports page
-        const reportPg=document.getElementById('pg-report');
-        if(reportPg&&reportPg.classList.contains('active')&&typeof renderReport==='function') renderReport();
-        // Employee view
-        const empPg=document.getElementById('pg-employee');
-        if(empPg&&empPg.classList.contains('active')&&typeof renderEmpView==='function') renderEmpView();
-        // Map
-        const mapPg=document.getElementById('pg-map');
-        if(mapPg&&mapPg.classList.contains('active')&&typeof renderMapMarkers==='function') renderMapMarkers();
+      if(data&&Array.isArray(data)){
+        // CRITICAL FIX: merge instead of blind overwrite — see mergeTransactions()
+        const _mergedTx=mergeTransactions(transactions,data);
+        if(JSON.stringify(_mergedTx)!==JSON.stringify(transactions)){
+          transactions=_mergedTx;
+          localStorage.setItem('v4_tx',JSON.stringify(transactions));
+          console.log('🔄 Transactions merged from cloud — refreshing all pages');
+          // Refresh ALL active pages
+          if(typeof renderDash==='function') renderDash();
+          const txPg=document.getElementById('pg-transactions');
+          if(txPg&&txPg.classList.contains('active')&&typeof renderAllTx==='function') renderAllTx();
+          const projPg=document.getElementById('pg-projects');
+          if(projPg&&projPg.classList.contains('active')&&typeof renderProjGrid==='function') renderProjGrid();
+          const ttPg=document.getElementById('pg-timetrack');
+          if(ttPg&&ttPg.classList.contains('active')&&typeof renderTimeReport==='function') renderTimeReport();
+          // ALERTS page — critical fix!
+          const alertsPg=document.getElementById('pg-alerts');
+          if(alertsPg&&alertsPg.classList.contains('active')&&typeof renderAlerts==='function') renderAlerts();
+          // Reports page
+          const reportPg=document.getElementById('pg-report');
+          if(reportPg&&reportPg.classList.contains('active')&&typeof renderReport==='function') renderReport();
+          // Employee view
+          const empPg=document.getElementById('pg-employee');
+          if(empPg&&empPg.classList.contains('active')&&typeof renderEmpView==='function') renderEmpView();
+          // Map
+          const mapPg=document.getElementById('pg-map');
+          if(mapPg&&mapPg.classList.contains('active')&&typeof renderMapMarkers==='function') renderMapMarkers();
+        }
       }
     });
     window.fbListen('v4_projects',data=>{
