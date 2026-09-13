@@ -10513,8 +10513,8 @@ function initMiniMap(lat,lng){
   setTimeout(()=>{
     if(miniMap_){miniMap_.remove();miniMap_=null;}
     miniMap_=L.map('miniMap').setView([lat||RYH.lat,lng||RYH.lng],lat?14:11);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
-      attribution:'© CARTO',subdomains:'abcd',crossOrigin:true
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© OpenStreetMap contributors',subdomains:'abc',crossOrigin:true
     }).addTo(miniMap_);
     if(lat&&lng){miniMarker_=L.marker([lat,lng]).addTo(miniMap_);}
     miniMap_.on('click',function(e){
@@ -10556,9 +10556,9 @@ function initMainMap(){
     const cartoUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
     const cartoAtt = '© OpenStreetMap © CARTO';
     
-    streetLayer_ = L.tileLayer(cartoUrl, {
-      attribution: cartoAtt,
-      subdomains: 'abcd',
+    streetLayer_ = L.tileLayer(osmUrl, {
+      attribution: '© OpenStreetMap contributors',
+      subdomains: 'abc',
       maxZoom: 19,
       crossOrigin: true
     });
