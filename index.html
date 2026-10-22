@@ -496,6 +496,22 @@ body::after{
 /* Insight tabs + alert view tabs raised when active already; rest sit on surface */
 #pg-transactions .ins-tab,#pg-alerts .alert-view-btn{background:#EEF0F4;box-shadow:3px 3px 7px #c5c9d2,-3px -3px 7px #ffffff;border:none}
 #pg-alerts .alert-view-btn.active{background:linear-gradient(135deg,var(--indigo),var(--violet));color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3)}
+/* Combobox — نوع المعاملة / المشروع (قائمة منسدلة مع شريط تمرير) */
+.cmb-box{position:absolute;z-index:60;background:#EEF0F4;border-radius:14px;box-shadow:6px 6px 12px #c5c9d2,-6px -6px 12px #ffffff;padding:6px;max-height:300px;overflow-y:auto;display:none;scrollbar-width:thin;scrollbar-color:rgba(79,70,229,.45) rgba(197,201,210,.45)}
+.cmb-box.open{display:block}
+.cmb-box::-webkit-scrollbar{width:8px}
+.cmb-box::-webkit-scrollbar-track{background:rgba(197,201,210,.45);border-radius:8px;margin:8px 0}
+.cmb-box::-webkit-scrollbar-thumb{background:rgba(79,70,229,.45);border-radius:8px}
+.cmb-box::-webkit-scrollbar-thumb:hover{background:var(--indigo)}
+.cmb-hdr{font-size:10.5px;font-weight:700;color:#64748B;padding:8px 10px 4px}
+.cmb-opt{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer}
+.cmb-opt.on{background:#fff;box-shadow:3px 3px 7px #c5c9d2,-3px -3px 7px #ffffff}
+.cmb-code{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--indigo);background:var(--ind-dim);border-radius:6px;padding:2px 8px;min-width:46px;text-align:center;flex-shrink:0}
+.cmb-name{flex:1;min-width:0;font-size:13px;font-weight:600;color:#0F172A}
+.cmb-sub{font-size:10.5px;color:#94A3B8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%}
+.cmb-sel{color:var(--indigo);font-weight:800}
+.cmb-empty{padding:14px;text-align:center;font-size:12px;color:#64748B}
+.cmb-add{color:var(--indigo);font-weight:700;cursor:pointer}
 #pg-projects .tb2 h2{color:var(--text)}
 #pg-projects .sinp{background:var(--surface);border-color:var(--border2);color:var(--text)}
 #pg-projects .sinp::placeholder{color:var(--text3)}
@@ -7802,6 +7818,8 @@ function openCreateTx(projCode,fromEmployee){
       if(el) attachVoiceButton(el);
     });
   },100);
+  initCombo('txProjSel',_cmbProjItems,{emptyHtml:'لا يوجد مشروع مطابق'});
+  initCombo('txIssueSel',_cmbIssueItems,{emptyHtml:'لا يوجد نوع مطابق — <span class="cmb-add" onmousedown="openQuickAddIssue()">+ إضافة نوع جديد</span>'});
   openModal('mCreateTx');
 }
 
@@ -7814,8 +7832,91 @@ function setTxType(t){
   document.getElementById('txTypeNote').textContent=t==='gov'?'المعاملة الحكومية ستُكوَّد وفق نظام التكويد المعتمد (مشروع-نوع-رقم-شهر-سنة)':'المهمة الفنية ستُعطى كود دعم فني هندسي (TSK-xxx)';
   if(t==='tech'){
     document.getElementById('txIssueSel').value='TSK';
+  } else {
+    const isEl=document.getElementById('txIssueSel');
+    if(isEl&&isEl.value.trim()==='TSK') isEl.value=''; // leftover from technical mode
   }
   updateTxCode();
+}
+
+// ══ Combobox: قائمة منسدلة حقيقية (بدل datalist) لحقلي «نوع المعاملة» و«المشروع» ══
+// القيم المكتوبة في الحقل بنفس صيغة datalist السابقة (الاسم) → updateTxCode/resolve* تعمل كما هي
+function initCombo(inputId, getItems, opts){
+  const inp=document.getElementById(inputId);
+  if(!inp||inp.dataset.cmb==='1') return;
+  inp.dataset.cmb='1';
+  opts=opts||{};
+  inp.removeAttribute('list');
+  const parent=inp.parentElement;
+  if(getComputedStyle(parent).position==='static') parent.style.position='relative';
+  const box=document.createElement('div');
+  box.className='cmb-box'; box.id=inputId+'_cmb'; box.setAttribute('role','listbox');
+  parent.appendChild(box);
+  inp.setAttribute('role','combobox'); inp.setAttribute('aria-autocomplete','list');
+  inp.setAttribute('aria-expanded','false'); inp.setAttribute('aria-controls',box.id);
+  let shown=[],hi=-1,filterOn=false;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const isOpen=()=>box.classList.contains('open');
+  function render(){
+    const q=filterOn?inp.value.trim().toLowerCase():'';
+    const all=getItems()||[];
+    shown=q?all.filter(it=>[it.code,it.label,it.sub].some(x=>String(x||'').toLowerCase().includes(q))):all;
+    const cur=inp.value.trim();
+    if(hi<0||hi>=shown.length){hi=shown.findIndex(it=>it.value===cur);if(hi<0) hi=shown.length?0:-1;}
+    let h='',lastG=null;
+    shown.forEach((it,k)=>{
+      if(it.group&&it.group!==lastG){h+=`<div class="cmb-hdr">${esc(it.group)}</div>`;lastG=it.group;}
+      const sel=it.value===cur;
+      h+=`<div class="cmb-opt${k===hi?' on':''}" role="option" id="${box.id}_${k}" data-k="${k}" aria-selected="${sel}"${it.depth?` style="padding-right:${10+it.depth*16}px"`:''}><span class="cmb-code">${esc(it.code)}</span><span class="cmb-name">${esc(it.label)}</span>${it.sub?`<span class="cmb-sub">${esc(it.sub)}</span>`:''}${sel?'<span class="cmb-sel">✓</span>':''}</div>`;
+    });
+    if(!shown.length) h=`<div class="cmb-empty">${opts.emptyHtml||'لا توجد نتائج مطابقة'}</div>`;
+    box.innerHTML=h;
+    if(hi>=0) inp.setAttribute('aria-activedescendant',box.id+'_'+hi); else inp.removeAttribute('aria-activedescendant');
+  }
+  function scrollHi(){const el=box.querySelector('.cmb-opt.on');if(el) el.scrollIntoView({block:'nearest'});}
+  function open(fromTyping){
+    filterOn=!!fromTyping; if(!fromTyping) hi=-1;
+    box.style.top=(inp.offsetTop+inp.offsetHeight+6)+'px';
+    box.style.left=inp.offsetLeft+'px'; box.style.width=inp.offsetWidth+'px';
+    render(); box.classList.add('open'); inp.setAttribute('aria-expanded','true'); scrollHi();
+  }
+  function close(){box.classList.remove('open');inp.setAttribute('aria-expanded','false');inp.removeAttribute('aria-activedescendant');}
+  function pick(k){
+    const it=shown[k]; if(!it) return;
+    inp.value=it.value; close();
+    inp.dispatchEvent(new Event('input',{bubbles:true}));
+    inp.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+  inp.addEventListener('mousedown',()=>{if(!isOpen()) open(false);});
+  inp.addEventListener('focus',()=>{if(!isOpen()) open(false);});
+  inp.addEventListener('input',e=>{if(!e.isTrusted) return; hi=-1; open(true);});
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();
+      if(!isOpen()){open(false);return;}
+      if(!shown.length) return;
+      hi=e.key==='ArrowDown'?(hi+1)%shown.length:(hi-1+shown.length)%shown.length;
+      render(); scrollHi();
+    } else if(e.key==='Enter'&&isOpen()&&hi>=0){e.preventDefault();pick(hi);}
+    else if(e.key==='Escape'&&isOpen()){e.preventDefault();e.stopPropagation();close();}
+    else if(e.key==='Tab') close();
+  });
+  box.addEventListener('mousedown',e=>{e.preventDefault();const o=e.target.closest('.cmb-opt');if(o) pick(+o.dataset.k);});
+  document.addEventListener('mousedown',e=>{if(e.target!==inp&&!box.contains(e.target)) close();});
+  inp.addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==inp) close();},150));
+}
+function _cmbIssueItems(){
+  const a=allIssues();
+  return [...a.filter(i=>!i.isInternal),...a.filter(i=>i.isInternal)].map(i=>({value:i.name,code:i.code,label:i.name,sub:i.agency||'',group:i.isInternal?'مهام داخلية':'معاملات حكومية وفنية'}));
+}
+function _cmbProjItems(){
+  const out=[];
+  const add=(p,d)=>{
+    out.push({value:p.name,code:p.code,label:p.name,depth:d,sub:d?getProjectPath(p.code).slice(0,-1).map(x=>x.name).join(' › '):''});
+    getProjectChildren(p.code).forEach(ch=>add(ch,d+1));
+  };
+  projects.filter(p=>!p.parentCode).forEach(p=>add(p,0));
+  return out;
 }
 
 function resolveProjCode(input){
@@ -11068,14 +11169,9 @@ function saveQuickIssue(){
   // Refresh issue selector
   const sel=document.getElementById('txIssueSel');
   if(sel){
-    const currentVal=sel.value;
-    sel.innerHTML='';
-    allIssues().forEach(i=>{
-      const o=document.createElement('option');
-      o.value=i.code; o.textContent=i.name;
-      sel.appendChild(o);
-    });
-    sel.value=code; // Select the newly added one
+    const isList=document.getElementById('txIssueList');
+    if(isList) isList.innerHTML=allIssues().map(i=>`<option value="${i.name}" data-code="${i.code}">${i.code} — ${i.name}</option>`).join('');
+    sel.value=name; // Select the newly added one (same format as the list)
     if(typeof updateTxCode==='function') updateTxCode();
   }
   // Refresh settings list if open
