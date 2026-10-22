@@ -35,9 +35,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script type="module">
   import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import{getFirestore,doc,setDoc,getDoc,onSnapshot,serverTimestamp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import{getFirestore,doc,setDoc,getDoc,onSnapshot,serverTimestamp,runTransaction}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
   const db=getFirestore(initializeApp({apiKey:"AIzaSyCKTuFXEXhG9h3HBiev4B9tSpAv5RHrBdY",authDomain:"rh-task-f5af5.firebaseapp.com",projectId:"rh-task-f5af5",storageBucket:"rh-task-f5af5.firebasestorage.app",messagingSenderId:"659904540726",appId:"1:659904540726:web:906b95022cc9607aa3a897"}));
-  window.fbSave=async(k,v)=>{try{await setDoc(doc(db,'rh_system',k),{data:v,updatedAt:serverTimestamp()});}catch(e){}};
+  window.fbSaveRaw=async(k,v)=>{try{await setDoc(doc(db,'rh_system',k),{data:v,updatedAt:serverTimestamp()});}catch(e){console.error('fbSave failed:',k,e);}};
+  // v4_tx: atomic read-merge-write (prevents one device from overwriting another device's new transactions)
+  window.fbSave=async(k,v)=>{if(k==='v4_tx'&&typeof window._txSaveMerged==='function')return window._txSaveMerged();return window.fbSaveRaw(k,v);};
+  window.fbTxn=(k,fn)=>runTransaction(db,async tr=>{const ref=doc(db,'rh_system',k);const s=await tr.get(ref);const next=fn(s.exists()?s.data().data:null);tr.set(ref,{data:next,updatedAt:serverTimestamp()});return next;});
   window.fbLoad=async(k)=>{try{const s=await getDoc(doc(db,'rh_system',k));return s.exists()?s.data().data:null;}catch(e){return null;}};
   window.fbListen=(k,cb)=>{try{onSnapshot(doc(db,'rh_system',k),s=>{if(s.exists())cb(s.data().data);});}catch(e){}};
   window._fbReady=true;
@@ -492,6 +495,7 @@ body::after{
 #pg-transactions .btn.bs:hover,#pg-alerts .btn.bs:hover{color:#6366F1;background:#EEF0F4;box-shadow:5px 5px 11px #c1c5cf,-5px -5px 11px #ffffff}
 /* Insight tabs + alert view tabs raised when active already; rest sit on surface */
 #pg-transactions .ins-tab,#pg-alerts .alert-view-btn{background:#EEF0F4;box-shadow:3px 3px 7px #c5c9d2,-3px -3px 7px #ffffff;border:none}
+#pg-alerts .alert-view-btn.active{background:linear-gradient(135deg,var(--indigo),var(--violet));color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3)}
 #pg-projects .tb2 h2{color:var(--text)}
 #pg-projects .sinp{background:var(--surface);border-color:var(--border2);color:var(--text)}
 #pg-projects .sinp::placeholder{color:var(--text3)}
@@ -3070,13 +3074,53 @@ function mergeTimeEntries(local, remote){
 // replacing wholesale. Prevents a newly-created/updated transaction from being
 // silently erased when a stale real-time snapshot arrives before the local
 // save has propagated (same class of bug fixed above for time entries).
-function mergeTransactions(local, remote){
-  if(!Array.isArray(local)) local=[];
-  if(!Array.isArray(remote)) remote=[];
+// ── Transactions cloud sync (v4_tx) ──
+// _txCloudBase = last cloud copy this device has seen (id → JSON).
+// Local changes = difference between current local array and that base.
+// They are applied on top of the latest cloud copy → nothing from other devices is lost,
+// and deletions are respected (no resurrection of deleted transactions).
+let _txCloudBase=null;
+function _txSetBase(arr){
+  if(!Array.isArray(arr)) return;
+  _txCloudBase=new Map();
+  arr.forEach(t=>{if(t&&t.id) _txCloudBase.set(t.id,JSON.stringify(t));});
+}
+function _txHasDupIds(arr){
+  const s=new Set();
+  for(const t of (arr||[])){if(!t||!t.id) continue; if(s.has(t.id)) return true; s.add(t.id);}
+  return false;
+}
+function _txDiff(local){
+  const up=new Map(),del=new Set(),ids=new Set();
+  (local||[]).forEach(t=>{
+    if(!t||!t.id) return;
+    ids.add(t.id);
+    const b=_txCloudBase?_txCloudBase.get(t.id):undefined;
+    if(b!==JSON.stringify(t)) up.set(t.id,{t,b});
+  });
+  if(_txCloudBase) _txCloudBase.forEach((_,id)=>{if(!ids.has(id)) del.add(id);});
+  return {up,del};
+}
+function _txApply(remote,d){
+  const out=[],seen=new Set();
+  (Array.isArray(remote)?remote:[]).forEach(r=>{
+    if(!r||!r.id){out.push(r);return;}
+    if(d.del.has(r.id)) return;              // deleted on this device
+    seen.add(r.id);
+    const u=d.up.get(r.id);
+    if(!u){out.push(r);return;}             // untouched locally → cloud version
+    if(u.b!==undefined&&JSON.stringify(r)===u.b){out.push(u.t);return;} // only changed locally
+    const lt=u.t.modifiedAt||u.t.createdAt||0, rt=r.modifiedAt||r.createdAt||0;
+    out.push(rt>lt?r:u.t);                   // changed on both → newer wins
+  });
+  const added=[];
+  d.up.forEach((u,id)=>{if(!seen.has(id)) added.push(u.t);}); // new local items (not yet in cloud)
+  return added.concat(out);
+}
+// Legacy union merge — used only if duplicate ids are ever detected
+function _txUnionMerge(local, remote){
   const merged=new Map();
-  // Add all local first (covers items not yet pushed to the server)
   local.forEach(t=>{if(t&&t.id) merged.set(t.id,t);});
-  // Then merge remote - prefer whichever side was modified more recently
   remote.forEach(t=>{
     if(!t||!t.id) return;
     const existing=merged.get(t.id);
@@ -3085,8 +3129,65 @@ function mergeTransactions(local, remote){
     const remoteTime=t.modifiedAt||t.createdAt||0;
     if(remoteTime>=localTime) merged.set(t.id,t);
   });
-  // Preserve the original "newest first" ordering produced by unshift() on creation
   return Array.from(merged.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+}
+function mergeTransactions(local, remote){
+  if(!Array.isArray(local)) local=[];
+  if(!Array.isArray(remote)) remote=[];
+  if(_txHasDupIds(local)||_txHasDupIds(remote)) return _txUnionMerge(local,remote);
+  return _txApply(remote,_txDiff(local));
+}
+function _refreshTxViews(){
+  if(typeof renderDash==='function') renderDash();
+  const txPg=document.getElementById('pg-transactions');
+  if(txPg&&txPg.classList.contains('active')&&typeof renderAllTx==='function') renderAllTx();
+  const projPg=document.getElementById('pg-projects');
+  if(projPg&&projPg.classList.contains('active')&&typeof renderProjGrid==='function') renderProjGrid();
+  const ttPg=document.getElementById('pg-timetrack');
+  if(ttPg&&ttPg.classList.contains('active')&&typeof renderTimeReport==='function') renderTimeReport();
+  const alertsPg=document.getElementById('pg-alerts');
+  if(alertsPg&&alertsPg.classList.contains('active')&&typeof renderAlerts==='function') renderAlerts();
+  const reportPg=document.getElementById('pg-report');
+  if(reportPg&&reportPg.classList.contains('active')&&typeof renderReport==='function') renderReport();
+  const empPg=document.getElementById('pg-employee');
+  if(empPg&&empPg.classList.contains('active')&&typeof renderEmpView==='function') renderEmpView();
+  const mapPg=document.getElementById('pg-map');
+  if(mapPg&&mapPg.classList.contains('active')&&typeof renderMapMarkers==='function') renderMapMarkers();
+}
+// Atomic save of v4_tx (called by window.fbSave for 'v4_tx'). Saves are queued one after another.
+let _txSaveChain=Promise.resolve(),_txRetryTimer=null,_txRetryDelay=5000,_txSaveErrShown=false;
+function _txSaveMerged(){
+  _txSaveChain=_txSaveChain.then(_txDoSave,_txDoSave);
+  return _txSaveChain;
+}
+async function _txDoSave(){
+  const clean=a=>JSON.parse(JSON.stringify(a)); // Firestore rejects undefined values
+  if(typeof window.fbTxn!=='function'||_txHasDupIds(transactions)){
+    return window.fbSaveRaw('v4_tx',clean(transactions)); // original behaviour (fallback)
+  }
+  const d=_txDiff(transactions);
+  if(_txCloudBase&&!d.up.size&&!d.del.size) return; // nothing new to send
+  try{
+    const written=await window.fbTxn('v4_tx',remote=>clean(_txApply(remote,d)));
+    const d2=_txDiff(transactions);           // keeps edits made while saving
+    _txSetBase(written);
+    const next=_txApply(written,d2);
+    _txSaveErrShown=false;_txRetryDelay=5000;
+    if(JSON.stringify(next)!==JSON.stringify(transactions)){
+      transactions=next;
+      try{localStorage.setItem('v4_tx',JSON.stringify(transactions));}catch(e){}
+      _refreshTxViews();
+    }
+  }catch(e){
+    console.error('❌ v4_tx cloud save failed:',e);
+    if(!_txSaveErrShown){
+      _txSaveErrShown=true;
+      try{toast('⚠️ تعذّر حفظ المعاملات في السحابة — ستُعاد المحاولة تلقائياً ('+((e&&e.message)||e)+')','er',6000);}catch(_){}
+    }
+    clearTimeout(_txRetryTimer);
+    _txRetryTimer=setTimeout(_txSaveMerged,_txRetryDelay);
+    _txRetryDelay=Math.min(_txRetryDelay*2,60000);
+  }
 }
 
 // Get pending writes lock - prevent listener from overwriting during a save
@@ -5604,7 +5705,7 @@ async function tryRestoreSession(){
         const fbUsers=await window.fbLoad('v4_users');
         if(fbUsers&&Array.isArray(fbUsers)){users=fbUsers;localStorage.setItem('v4_users',JSON.stringify(users));}
         const fbTx=await window.fbLoad('v4_tx');
-        if(fbTx&&Array.isArray(fbTx)){transactions=fbTx;localStorage.setItem('v4_tx',JSON.stringify(transactions));}
+        if(fbTx&&Array.isArray(fbTx)){transactions=fbTx;_txSetBase(fbTx);localStorage.setItem('v4_tx',JSON.stringify(transactions));}
         const fbProj=await window.fbLoad('v4_projects');
         if(fbProj&&Array.isArray(fbProj)){projects=fbProj;localStorage.setItem('v4_projects',JSON.stringify(projects));}
         const fbTimeEntries=await window.fbLoad('v4_time_entries');
@@ -5714,6 +5815,7 @@ async function doLogin(){
       // Sync TRANSACTIONS
       if(fbTx&&Array.isArray(fbTx)){
         transactions=fbTx;
+        _txSetBase(fbTx);
         localStorage.setItem('v4_tx',JSON.stringify(transactions));
         console.log('✅ Transactions:',transactions.length);
       }
@@ -5806,7 +5908,7 @@ async function doLogin(){
   renderDash();
   initMainMap();
   startActivityTicker();
-  requestNotifPermission();
+  if(typeof requestNotifPermission==='function') requestNotifPermission(); // was undefined → crashed login before live sync started
   checkAndNotify();
   updateAlertsBadge();
   snd('create');
@@ -5816,35 +5918,24 @@ async function doLogin(){
   }
 
   // Setup real-time Firebase listeners for live sync
+  attachFbListeners();
+}
+
+// Real-time listeners — used by login AND by session restore (F5). Attached once only.
+function attachFbListeners(){
+  if(window._fbListenersAttached) return;
   if(window.fbListen){
+    window._fbListenersAttached=true;
     window.fbListen('v4_tx',data=>{
       if(data&&Array.isArray(data)){
-        // CRITICAL FIX: merge instead of blind overwrite — see mergeTransactions()
+        // Merge cloud copy with local pending changes (see mergeTransactions)
         const _mergedTx=mergeTransactions(transactions,data);
+        _txSetBase(data);
         if(JSON.stringify(_mergedTx)!==JSON.stringify(transactions)){
           transactions=_mergedTx;
           localStorage.setItem('v4_tx',JSON.stringify(transactions));
           console.log('🔄 Transactions merged from cloud — refreshing all pages');
-          // Refresh ALL active pages
-          if(typeof renderDash==='function') renderDash();
-          const txPg=document.getElementById('pg-transactions');
-          if(txPg&&txPg.classList.contains('active')&&typeof renderAllTx==='function') renderAllTx();
-          const projPg=document.getElementById('pg-projects');
-          if(projPg&&projPg.classList.contains('active')&&typeof renderProjGrid==='function') renderProjGrid();
-          const ttPg=document.getElementById('pg-timetrack');
-          if(ttPg&&ttPg.classList.contains('active')&&typeof renderTimeReport==='function') renderTimeReport();
-          // ALERTS page — critical fix!
-          const alertsPg=document.getElementById('pg-alerts');
-          if(alertsPg&&alertsPg.classList.contains('active')&&typeof renderAlerts==='function') renderAlerts();
-          // Reports page
-          const reportPg=document.getElementById('pg-report');
-          if(reportPg&&reportPg.classList.contains('active')&&typeof renderReport==='function') renderReport();
-          // Employee view
-          const empPg=document.getElementById('pg-employee');
-          if(empPg&&empPg.classList.contains('active')&&typeof renderEmpView==='function') renderEmpView();
-          // Map
-          const mapPg=document.getElementById('pg-map');
-          if(mapPg&&mapPg.classList.contains('active')&&typeof renderMapMarkers==='function') renderMapMarkers();
+          _refreshTxViews();
         }
       }
     });
@@ -6080,8 +6171,10 @@ function goPage(pg){
     if(window.fbLoad){
       window.fbLoad('v4_tx').then(data=>{
         if(data&&Array.isArray(data)){
-          if(JSON.stringify(data)!==JSON.stringify(transactions)){
-            transactions=data;
+          const _mergedTx=mergeTransactions(transactions,data);
+          _txSetBase(data);
+          if(JSON.stringify(_mergedTx)!==JSON.stringify(transactions)){
+            transactions=_mergedTx;
             localStorage.setItem('v4_tx',JSON.stringify(transactions));
             console.log('🔄 Alerts page: refreshed transactions from cloud');
           }
@@ -12177,7 +12270,31 @@ function buildQatiyyaAlerts(){
     html+=`</div>`;
   }
 
+  window._qatiyyaCounts={achieved:(achieved.length&&canSeeAchieved)?achieved.length:0,pending:pending.length};
   return html;
+}
+
+// شريط مطوي لإشعارات القطعية — حتى لا تدفع محتوى طريقة العرض المختارة إلى أسفل الشاشة
+function wrapQatiyyaFold(q){
+  if(!q) return '';
+  const c=window._qatiyyaCounts||{achieved:0,pending:0};
+  const open=!!window._qFoldOpen;
+  return `<div style="background:#EEF0F4;border-radius:14px;box-shadow:6px 6px 12px #c5c9d2,-6px -6px 12px #ffffff;margin-bottom:18px;overflow:hidden">
+    <div onclick="toggleQatiyyaFold()" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:12px 16px;flex-wrap:wrap">
+      <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#34D399,#059669);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 3px 8px rgba(5,150,105,.3)">✓</div>
+      <div style="flex:1;font-size:13px;font-weight:800;color:#065F46">إشعارات القطعية</div>
+      ${c.achieved?`<span style="background:#059669;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:7px">✦ اكتسبت القطعية: <span style="font-family:'JetBrains Mono'">${c.achieved}</span></span>`:''}
+      ${c.pending?`<span style="background:#6366F1;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:7px">⏳ تنتظر: <span style="font-family:'JetBrains Mono'">${c.pending}</span></span>`:''}
+      <span id="qFoldLbl" style="font-size:11px;font-weight:700;color:#475569;margin-right:6px">${open?'إخفاء ▲':'عرض ▼'}</span>
+    </div>
+    <div id="qFoldBody" style="display:${open?'block':'none'};padding:4px 14px 6px">${q}</div>
+  </div>`;
+}
+function toggleQatiyyaFold(){
+  window._qFoldOpen=!window._qFoldOpen;
+  const b=document.getElementById('qFoldBody'),l=document.getElementById('qFoldLbl');
+  if(b) b.style.display=window._qFoldOpen?'block':'none';
+  if(l) l.textContent=window._qFoldOpen?'إخفاء ▲':'عرض ▼';
 }
 
 function renderAlerts(){
@@ -12233,7 +12350,7 @@ function renderAlerts(){
     </div>
   `;
 
-  const qatiyyaHtml=buildQatiyyaAlerts();
+  const qatiyyaHtml=wrapQatiyyaFold(buildQatiyyaAlerts());
   if(allTx.length===0){
     document.getElementById('alertsList').innerHTML=qatiyyaHtml+`<div style="text-align:center;padding:60px 20px;color:var(--text3)">
       <div style="font-size:40px;margin-bottom:12px">📋</div>
